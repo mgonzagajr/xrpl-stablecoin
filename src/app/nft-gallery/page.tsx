@@ -6,6 +6,9 @@ import { useWallets } from '@/hooks/useWallets';
 import { useNFT } from '@/hooks/useNFT';
 import { useToast } from '@/hooks/useToast';
 import ToastContainer from '@/components/ToastContainer';
+import Header from '@/components/Header';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
 import { CopyButton } from '@/components/CopyButton';
 import { getCachedMetadata, setCachedMetadata, clearExpiredCache } from '@/lib/ipfs-cache';
 import { ipfsQueue } from '@/lib/ipfs-queue';
@@ -215,7 +218,7 @@ export default function NFTGalleryPage() {
     const hasFailed = failedMetadata.has(nft.nftokenId);
 
     return (
-      <div key={nft.nftokenId} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+      <Card key={nft.nftokenId} className="hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -308,12 +311,13 @@ export default function NFTGalleryPage() {
         {/* Load Metadata Button */}
         {!metadata && !isLoading && !hasFailed && nft.uri && (
           <div className="mt-4">
-            <button
+            <Button
               onClick={() => fetchMetadata(nft.uri!, nft.nftokenId)}
-              className="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors cursor-pointer"
+              type="primary"
+              className="w-full"
             >
               Load Metadata
-            </button>
+            </Button>
           </div>
         )}
 
@@ -337,7 +341,7 @@ export default function NFTGalleryPage() {
               <p className="text-xs text-yellow-600 mt-1">
                 This NFT may not have metadata uploaded to IPFS yet
               </p>
-              <button
+              <Button
                 onClick={() => {
                   // Remove from failed list and try again
                   setFailedMetadata(prev => {
@@ -352,40 +356,48 @@ export default function NFTGalleryPage() {
                   });
                   fetchMetadata(nft.uri!, nft.nftokenId);
                 }}
-                className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                type="secondary"
+                size="sm"
+                className="mt-2"
               >
                 Try Again
-              </button>
+              </Button>
             </div>
           </div>
         )}
-      </div>
+      </Card>
     );
   };
 
   if (walletsLoading) {
     return (
-      <div className="min-h-screen bg-white p-8 flex items-center justify-center">
-        <p className="text-gray-600">Loading wallets...</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+        <Header />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
+          <Card className="text-center">
+            <p className="text-gray-600">Loading wallets...</p>
+          </Card>
+        </main>
       </div>
     );
   }
 
   if (!wallets) {
     return (
-      <div className="min-h-screen bg-white p-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">NFT Gallery</h1>
-          <div className="text-center py-8">
-            <p className="text-gray-500">Please initialize wallets first in the setup page.</p>
-            <a 
-              href="/setup" 
-              className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+        <Header />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Card className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">NFT Gallery</h1>
+            <p className="text-gray-500 mb-6">Please initialize wallets first in the setup page.</p>
+            <Button
+              onClick={() => window.location.href = '/setup'}
+              type="primary"
             >
               Go to Setup Page
-            </a>
-          </div>
-        </div>
+            </Button>
+          </Card>
+        </main>
       </div>
     );
   }
@@ -394,16 +406,18 @@ export default function NFTGalleryPage() {
   const refreshFunction = selectedTab === 'seller' ? refreshSellerNFTs : refreshBuyerNFTs;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+      <Header />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">NFT Gallery</h1>
-          <a
-            href="/nft"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+          <h1 className="text-2xl font-bold text-gray-900">NFT Gallery</h1>
+          <Button
+            onClick={() => window.location.href = '/nft'}
+            type="secondary"
           >
             ← Back to NFT Operations
-          </a>
+          </Button>
         </div>
 
         {/* Queue Status Indicator */}
@@ -451,13 +465,13 @@ export default function NFTGalleryPage() {
           <h2 className="text-xl font-semibold text-gray-900">
             {selectedTab === 'seller' ? 'Seller' : 'Buyer'} NFTs
           </h2>
-          <button
+          <Button
             onClick={refreshFunction}
             disabled={listLoading}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 cursor-pointer"
+            type="secondary"
           >
             {listLoading ? 'Loading...' : 'Refresh NFTs'}
-          </button>
+          </Button>
         </div>
 
         {/* NFT Grid */}
@@ -481,7 +495,7 @@ export default function NFTGalleryPage() {
             </p>
           </div>
         )}
-      </div>
+      </main>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>

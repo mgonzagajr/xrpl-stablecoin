@@ -6,6 +6,10 @@ import { useStablecoinOperations } from '@/hooks/useStablecoinOperations';
 import { useToast } from '@/hooks/useToast';
 import { CopyButton } from '@/components/CopyButton';
 import ToastContainer from '@/components/ToastContainer';
+import Header from '@/components/Header';
+import Button from '@/components/Button';
+import Card from '@/components/Card';
+import Input from '@/components/Input';
 import { generateIdempotencyKey } from '@/lib/idempotency-helper';
 import { useState, useEffect } from 'react';
 
@@ -255,71 +259,78 @@ export default function NFTPage() {
 
   if (walletsLoading) {
     return (
-      <div className="min-h-screen bg-white p-8">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">NFT Operations</h1>
-          <div className="text-center py-8">
-            <p className="text-gray-500">Loading wallets...</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+        <Header />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">NFT Operations</h1>
+            <div className="text-center py-8">
+              <p className="text-gray-500">Loading wallets...</p>
+            </div>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
 
   if (!wallets) {
     return (
-      <div className="min-h-screen bg-white p-8">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">NFT Operations</h1>
-          <div className="text-center py-8">
-            <p className="text-gray-500">Please initialize wallets first in the setup page.</p>
-            <div className="mt-4 space-x-4">
-              <a 
-                href="/setup" 
-                className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+        <Header />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="card text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">NFT Operations</h1>
+            <p className="text-gray-500 mb-6">Please initialize wallets first in the setup page.</p>
+            <div className="space-x-4">
+              <Button
+                onClick={() => window.location.href = '/setup'}
+                type="primary"
               >
                 Go to Setup Page
-              </a>
-              <button
+              </Button>
+              <Button
                 onClick={() => {
                   localStorage.removeItem('xrpl_wallets_cached_v1');
                   window.location.reload();
                 }}
-                className="inline-block px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
+                type="secondary"
               >
                 Clear Cache & Reload
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+      <Header />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">NFT Operations (XLS-20)</h1>
-          <a
-            href="/nft-gallery"
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer"
+          <h1 className="text-2xl font-bold text-gray-900">NFT Operations (XLS-20)</h1>
+          <Button
+            onClick={() => window.location.href = '/nft-gallery'}
+            type="primary"
           >
             NFT Gallery →
-          </a>
+          </Button>
         </div>
 
         {/* Balances Section */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
+        <Card className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Balances</h2>
-            <button
+            <Button
               onClick={fetchBalances}
               disabled={listLoading}
-              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer"
+              type="secondary"
+              size="sm"
             >
               {listLoading ? 'Loading...' : 'Refresh Balances'}
-            </button>
+            </Button>
           </div>
 
           {balancesData ? (
@@ -354,10 +365,10 @@ export default function NFTPage() {
           ) : (
             <div className="text-gray-500 text-sm">Loading balances...</div>
           )}
-        </div>
+        </Card>
 
         {/* Mint NFT Section */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
+        <Card className="mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">1. Mint NFT</h2>
 
           {mintError && (
@@ -367,18 +378,13 @@ export default function NFTPage() {
           )}
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Metadata URI
-              </label>
-              <input
-                type="text"
-                value={mintUri}
-                onChange={(e) => setMintUri(e.target.value)}
-                placeholder="ipfs://... or https://..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
-            </div>
+            <Input
+              label="Metadata URI"
+              type="text"
+              value={mintUri}
+              onChange={(e) => setMintUri(e.target.value)}
+              placeholder="ipfs://... or https://..."
+            />
 
             <div className="flex items-center">
               <input
@@ -394,17 +400,13 @@ export default function NFTPage() {
             </div>
 
             <div>
-              <label htmlFor="taxon" className="block text-sm font-medium text-gray-700 mb-1">
-                Collection Taxon (0-4294967295)
-              </label>
-              <input
+              <Input
+                label="Collection Taxon (0-4294967295)"
                 type="number"
-                id="taxon"
                 value={mintTaxon}
                 onChange={(e) => setMintTaxon(Number(e.target.value))}
                 min="0"
                 max="4294967295"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                 placeholder="0"
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -413,7 +415,7 @@ export default function NFTPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Idempotency key (optional)
               </label>
               <div className="flex space-x-2">
@@ -422,38 +424,39 @@ export default function NFTPage() {
                   value={mintIdempotency}
                   onChange={(e) => setMintIdempotency(e.target.value)}
                   placeholder="e.g., mint-001"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  className="input flex-1"
                 />
-                <button
-                  type="button"
+                <Button
                   onClick={async () => setMintIdempotency(await generateIdempotencyKey('mint'))}
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors cursor-pointer text-sm"
+                  type="secondary"
+                  size="sm"
                 >
                   Auto
-                </button>
+                </Button>
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleMint}
               disabled={mintLoading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              type="primary"
             >
               {mintLoading ? 'Minting...' : 'Mint NFT'}
-            </button>
+            </Button>
           </div>
 
           {/* Seller NFTs Table */}
           <div className="mt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Seller NFTs</h3>
-              <button
+              <Button
                 onClick={refreshSellerNFTs}
                 disabled={listLoading}
-                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer"
+                type="secondary"
+                size="sm"
               >
                 {listLoading ? 'Loading...' : 'Refresh'}
-              </button>
+              </Button>
             </div>
 
             {sellerNFTs.length > 0 ? (
@@ -487,10 +490,10 @@ export default function NFTPage() {
               <div className="text-gray-500 text-sm">No NFTs found</div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Create Offer Section */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
+        <Card className="mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">2. Create Sell Offer (SBR)</h2>
 
           {createOfferError && (
@@ -501,13 +504,13 @@ export default function NFTPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Select NFT
               </label>
               <select
                 value={offerNftokenId}
                 onChange={(e) => setOfferNftokenId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white cursor-pointer"
+                className="input w-full cursor-pointer"
               >
                 <option value="">Choose an NFT...</option>
                 {sellerNFTs.map((nft) => (
@@ -518,21 +521,16 @@ export default function NFTPage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Price (SBR)
-              </label>
-              <input
-                type="text"
-                value={offerAmount}
-                onChange={(e) => setOfferAmount(e.target.value)}
-                placeholder="Enter price in SBR"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
-            </div>
+            <Input
+              label="Price (SBR)"
+              type="text"
+              value={offerAmount}
+              onChange={(e) => setOfferAmount(e.target.value)}
+              placeholder="Enter price in SBR"
+            />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Idempotency key (optional)
               </label>
               <div className="flex space-x-2">
@@ -541,38 +539,39 @@ export default function NFTPage() {
                   value={offerIdempotency}
                   onChange={(e) => setOfferIdempotency(e.target.value)}
                   placeholder="e.g., offer-001"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  className="input flex-1"
                 />
-                <button
-                  type="button"
+                <Button
                   onClick={async () => setOfferIdempotency(await generateIdempotencyKey('offer'))}
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors cursor-pointer text-sm"
+                  type="secondary"
+                  size="sm"
                 >
                   Auto
-                </button>
+                </Button>
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleCreateOffer}
               disabled={createOfferLoading || !offerNftokenId || !offerAmount}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              type="success"
             >
               {createOfferLoading ? 'Creating offer...' : 'Create sell offer'}
-            </button>
+            </Button>
           </div>
 
           {/* Seller Offers Table */}
           <div className="mt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Seller Offers</h3>
-              <button
+              <Button
                 onClick={refreshOffers}
                 disabled={listOffersLoading}
-                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer"
+                type="secondary"
+                size="sm"
               >
                 {listOffersLoading ? 'Loading...' : 'Refresh Offers'}
-              </button>
+              </Button>
             </div>
 
             {offers.length > 0 ? (
@@ -601,14 +600,14 @@ export default function NFTPage() {
                         <td className="py-2 px-3">
                           <div className="flex items-center space-x-2">
                             <CopyButton text={offer.offerIndex} />
-                            <button
+                            <Button
                               onClick={() => handleCancelOffer(offer.offerIndex)}
                               disabled={cancelingOfferIndex === offer.offerIndex}
-                              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50 cursor-pointer"
-                              title="Cancel offer"
+                              type="danger"
+                              size="sm"
                             >
                               {cancelingOfferIndex === offer.offerIndex ? 'Canceling...' : 'Cancel'}
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -620,10 +619,10 @@ export default function NFTPage() {
               <div className="text-gray-500 text-sm">No offers found</div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Accept Offer Section */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
+        <Card className="mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">3. Accept Offer (Buyer)</h2>
 
           {acceptOfferError && (
@@ -634,13 +633,13 @@ export default function NFTPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Offer Index
               </label>
               <select
                 value={acceptOfferIndex}
                 onChange={(e) => setAcceptOfferIndex(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white cursor-pointer"
+                className="input w-full cursor-pointer"
               >
                 <option value="">Choose an offer...</option>
                 {offers.map((offer) => (
@@ -655,7 +654,7 @@ export default function NFTPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Idempotency key (optional)
               </label>
               <div className="flex space-x-2">
@@ -664,38 +663,39 @@ export default function NFTPage() {
                   value={acceptIdempotency}
                   onChange={(e) => setAcceptIdempotency(e.target.value)}
                   placeholder="e.g., accept-001"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  className="input flex-1"
                 />
-                <button
-                  type="button"
+                <Button
                   onClick={async () => setAcceptIdempotency(await generateIdempotencyKey('accept'))}
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors cursor-pointer text-sm"
+                  type="secondary"
+                  size="sm"
                 >
                   Auto
-                </button>
+                </Button>
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleAcceptOffer}
               disabled={acceptOfferLoading || !acceptOfferIndex}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              type="primary"
             >
               {acceptOfferLoading ? 'Accepting offer...' : 'Accept offer (Buyer)'}
-            </button>
+            </Button>
           </div>
 
           {/* Buyer NFTs Table */}
           <div className="mt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Buyer NFTs</h3>
-              <button
+              <Button
                 onClick={refreshBuyerNFTs}
                 disabled={listLoading}
-                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer"
+                type="secondary"
+                size="sm"
               >
                 {listLoading ? 'Loading...' : 'Refresh'}
-              </button>
+              </Button>
             </div>
 
             {buyerNFTs.length > 0 ? (
@@ -729,10 +729,10 @@ export default function NFTPage() {
               <div className="text-gray-500 text-sm">No NFTs found</div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Burn NFT Section */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
+        <Card className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">4. Burn NFT (Seller/Buyer)</h2>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
             <div className="flex">
@@ -758,7 +758,7 @@ export default function NFTPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Select Owner
               </label>
               <select
@@ -767,7 +767,7 @@ export default function NFTPage() {
                   setBurnRole(e.target.value as 'seller' | 'buyer');
                   setBurnNftokenId(''); // Clear NFT selection when changing role
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-900 bg-white cursor-pointer"
+                className="input w-full cursor-pointer"
               >
                 <option value="seller">Seller NFTs</option>
                 <option value="buyer">Buyer NFTs</option>
@@ -775,13 +775,13 @@ export default function NFTPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Select NFT to Burn
               </label>
               <select
                 value={burnNftokenId}
                 onChange={(e) => setBurnNftokenId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-900 bg-white cursor-pointer"
+                className="input w-full cursor-pointer"
               >
                 <option value="">Choose an NFT to burn...</option>
                 {(burnRole === 'seller' ? sellerNFTs : buyerNFTs).map((nft) => (
@@ -798,7 +798,7 @@ export default function NFTPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Idempotency key (optional)
               </label>
               <div className="flex space-x-2">
@@ -807,30 +807,29 @@ export default function NFTPage() {
                   value={burnIdempotency}
                   onChange={(e) => setBurnIdempotency(e.target.value)}
                   placeholder="e.g., burn-001"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 text-gray-900 bg-white"
+                  className="input flex-1"
                 />
-                <button
-                  type="button"
+                <Button
                   onClick={async () => setBurnIdempotency(await generateIdempotencyKey('burn'))}
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors cursor-pointer text-sm"
+                  type="secondary"
+                  size="sm"
                 >
                   Auto
-                </button>
+                </Button>
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleBurn}
               disabled={burnLoading || !burnNftokenId || burningNftokenId === burnNftokenId}
-              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              type="danger"
             >
               {burnLoading || burningNftokenId === burnNftokenId ? 'Burning NFT...' : 'Burn NFT (IRREVERSIBLE)'}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        </Card>
+      </main>
 
-      {/* Toast Container */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );

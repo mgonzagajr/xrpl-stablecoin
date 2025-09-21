@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Client, Wallet as XrplWallet } from 'xrpl';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { WalletData, ApiResponse, WalletsApiData } from '@/types/wallet';
-
-// POC storage - NOT production grade secret management
-const WALLETS_FILE_PATH = path.join(process.cwd(), 'data', 'wallets.json');
+import { saveData, loadData } from '@/lib/vercel-storage';
 
 function validateEnvironment(): { isValid: boolean; error?: string } {
   const wsUrl = process.env.XRPL_WS_URL;
@@ -102,14 +98,7 @@ async function generateWallets(): Promise<WalletData> {
   }
 }
 
-async function ensureDataDirectory(): Promise<void> {
-  const dataDir = path.dirname(WALLETS_FILE_PATH);
-  try {
-    await fs.access(dataDir);
-  } catch {
-    await fs.mkdir(dataDir, { recursive: true });
-  }
-}
+// Função removida - não é mais necessária com Vercel Blob
 
 export async function POST(): Promise<NextResponse<ApiResponse<WalletsApiData>>> {
   try {
@@ -123,15 +112,13 @@ export async function POST(): Promise<NextResponse<ApiResponse<WalletsApiData>>>
     }
 
     // Check if wallets already exist
-    try {
-      const existingData = await fs.readFile(WALLETS_FILE_PATH, 'utf-8');
-      const wallets: WalletData = JSON.parse(existingData);
-      
+    const existingWallets = await loadData<WalletData>('wallets.json');
+    if (existingWallets) {
       // Return existing wallets without secrets
       const response: WalletsApiData = {
-        network: wallets.network,
-        sourceTag: wallets.sourceTag,
-        wallets: wallets.wallets.map(w => ({ role: w.role, address: w.address }))
+        network: existingWallets.network,
+        sourceTag: existingWallets.sourceTag,
+        wallets: existingWallets.wallets.map(w => ({ role: w.role, address: w.address }))
       };
 
       return NextResponse.json({
@@ -139,18 +126,13 @@ export async function POST(): Promise<NextResponse<ApiResponse<WalletsApiData>>>
         created: false,
         data: response
       });
-    } catch {
-      // File doesn't exist, generate new wallets
     }
 
     // Generate new wallets
     const walletData = await generateWallets();
     
-    // Ensure data directory exists
-    await ensureDataDirectory();
-    
-    // Write wallets to file (secrets stored server-side only)
-    await fs.writeFile(WALLETS_FILE_PATH, JSON.stringify(walletData, null, 2));
+    // Save wallets to storage (Vercel Blob in production, local file in development)
+    await saveData('wallets.json', walletData);
 
     // Return wallets without secrets
     const response: WalletsApiData = {

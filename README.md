@@ -25,7 +25,7 @@ Um sistema de gerenciamento de carteiras XRPL para Proof of Concept (POC) desenv
 - **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS
 - **Backend**: Next.js API Routes
 - **Blockchain**: XRPL SDK v4.4.0
-- **Armazenamento**: Sistema de arquivos JSON (POC apenas)
+- **Armazenamento**: Sistema de arquivos JSON (desenvolvimento) / Vercel Blob (produção)
 - **Configuração**: Variáveis de ambiente para XRPL
 
 ## 📁 Estrutura do Projeto
@@ -594,12 +594,51 @@ O sistema cria os seguintes arquivos na pasta `data/`:
 - Atualização automática de listas após operações (ofertas, NFTs)
 - Suporte completo ao fluxo XLS-20 (mint, offer, accept, cancel, burn)
 
+## ☁️ Deploy no Vercel
+
+Este projeto está configurado para funcionar tanto em desenvolvimento local quanto em produção no Vercel:
+
+### **Desenvolvimento Local:**
+- Usa arquivos JSON na pasta `data/`
+- Funciona exatamente como antes
+- Sem configuração adicional necessária
+
+### **Produção (Vercel):**
+- Usa **Vercel Blob Storage** automaticamente
+- Dados persistem entre deployments
+- Acesso global e rápido
+
+### **Configuração do Vercel Blob:**
+
+1. **Criar Blob Storage no Vercel:**
+   - Acesse o [Vercel Dashboard](https://vercel.com/dashboard)
+   - Vá para seu projeto → **Storage** → **Create Database** → **Blob**
+   - Dê um nome (ex: `xrpl-stablecoin-storage`)
+
+2. **Configurar Variável de Ambiente:**
+   - **Settings** → **Environment Variables**
+   - **Name:** `BLOB_READ_WRITE_TOKEN`
+   - **Value:** `vercel_blob_rw_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+   - **Environment:** Production, Preview, Development
+
+3. **Deploy:**
+   ```bash
+   vercel --prod
+   ```
+
+### **Custos:**
+- **$0.15/GB/mês** para armazenamento
+- **$0.50/milhão** de operações de leitura
+- **$5.00/milhão** de operações de escrita
+
+Para um projeto pequeno, os custos são praticamente zero!
+
 ## 🚧 Limitações POC
 
-- Armazenamento em arquivo JSON (não adequado para produção)
 - Sem autenticação ou autorização
 - Sem criptografia adicional dos dados
 - Sem backup automático
+- Armazenamento local em desenvolvimento (produção usa Vercel Blob)
 
 ## 📄 Licença
 

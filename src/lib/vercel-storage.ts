@@ -27,12 +27,28 @@ export async function loadData<T>(filename: string): Promise<T | null> {
   try {
     if (isProduction) {
       // Em produção: usar Vercel Blob
-      const response = await fetch(`https://blob.vercel-storage.com/${filename}`);
-      if (!response.ok) {
+      try {
+        const { list } = await import('@vercel/blob');
+        const { blobs } = await list();
+        const targetBlob = blobs.find(blob => blob.pathname === filename);
+        
+        if (!targetBlob) {
+          console.log(`Blob ${filename} not found in Vercel Blob storage`);
+          return null;
+        }
+        
+        const response = await fetch(targetBlob.url);
+        if (!response.ok) {
+          console.error(`Failed to fetch blob ${filename}: ${response.status}`);
+          return null;
+        }
+        
+        const jsonData = await response.text();
+        return JSON.parse(jsonData);
+      } catch (blobError) {
+        console.error('Vercel Blob error:', blobError);
         return null;
       }
-      const jsonData = await response.text();
-      return JSON.parse(jsonData);
     } else {
       // Em desenvolvimento: usar sistema de arquivos local
       const filePath = join(process.cwd(), 'data', filename);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, Wallet } from 'xrpl';
-import fs from 'fs';
-import path from 'path';
+import { loadData } from '@/lib/vercel-storage';
+import { getWebSocketUrl } from '@/lib/network-config';
 import { ensureFunded } from '@/lib/xrpl-helpers';
 import { addNFTLogEntry, findNFTLogEntry } from '@/lib/nft-log';
 import { WalletData } from '@/types/wallet';
@@ -58,16 +58,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Load wallets
-    const walletsPath = path.join(process.cwd(), 'data', 'wallets.json');
-    if (!fs.existsSync(walletsPath)) {
+    // Load wallets from storage (Vercel Blob in production, local file in development)
+    const wallets = await loadData<WalletData>('wallets.json');
+    if (!wallets) {
       return NextResponse.json(
         { ok: false, error: 'WALLETS_NOT_FOUND' },
         { status: 400 }
       );
     }
-
-    const wallets: WalletData = JSON.parse(fs.readFileSync(walletsPath, 'utf8'));
     const sellerWalletData = wallets.wallets.find(w => w.role === 'seller');
     if (!sellerWalletData) {
       return NextResponse.json(
@@ -77,7 +75,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Connect to XRPL
-    const client = new Client(process.env.XRPL_WS_URL!);
+    const wsUrl = getWebSocketUrl();
+    const client = new Client(wsUrl);
     await client.connect();
 
     try {

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'xrpl';
 import { getWebSocketUrl, hasFaucet } from '@/lib/network-config';
-import fs from 'fs';
-import path from 'path';
+import { loadData } from '@/lib/vercel-storage';
 
 interface WalletData {
   version: number;
@@ -37,16 +36,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read wallets from file
-    const walletsPath = path.join(process.cwd(), 'data', 'wallets.json');
-    if (!fs.existsSync(walletsPath)) {
+    // Load wallets from storage (Vercel Blob in production, local file in development)
+    const walletsData = await loadData<WalletData>('wallets.json');
+    if (!walletsData) {
       return NextResponse.json(
         { ok: false, error: 'MISSING_WALLETS_STORE' },
         { status: 500 }
       );
     }
-
-    const walletsData: WalletData = JSON.parse(fs.readFileSync(walletsPath, 'utf8'));
     const wallet = walletsData.wallets.find(w => w.role === role);
     
     if (!wallet) {

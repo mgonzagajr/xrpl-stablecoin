@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'xrpl';
-import fs from 'fs';
-import path from 'path';
+// Removed fs import
+// Removed path import
+import { loadData } from '@/lib/vercel-storage';
+import { getWebSocketUrl } from '@/lib/network-config';
 import { WalletData } from '@/types/wallet';
 
 interface NFTOfferExtended {
@@ -32,19 +34,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Load wallets
-    const walletsPath = path.join(process.cwd(), 'data', 'wallets.json');
-    if (!fs.existsSync(walletsPath)) {
+    // Load wallets from storage (Vercel Blob in production, local file in development)
+    const wallets = await loadData<WalletData>('wallets.json');
+    if (!wallets) {
       return NextResponse.json(
         { ok: false, error: 'WALLETS_NOT_FOUND' },
         { status: 400 }
       );
     }
 
-    const wallets: WalletData = JSON.parse(fs.readFileSync(walletsPath, 'utf8'));
-
     // Connect to XRPL
-    const client = new Client(process.env.XRPL_WS_URL!);
+    const wsUrl = getWebSocketUrl();
+    const client = new Client(wsUrl);
     await client.connect();
 
     try {

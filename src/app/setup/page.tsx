@@ -95,6 +95,11 @@ export default function SetupPage() {
     (document.getElementById('distributeIdempotency') as HTMLInputElement).value = key;
   };
 
+  // Set page title
+  useEffect(() => {
+    document.title = "Setup - XRPL Stablecoin POC";
+  }, []);
+
   // Auto-fetch balances when wallets are available
   useEffect(() => {
     if (wallets && !balancesData) {

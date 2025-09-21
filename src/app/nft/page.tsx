@@ -57,6 +57,11 @@ export default function NFTPage() {
   const [burnIdempotency, setBurnIdempotency] = useState('');
   const [burningNftokenId, setBurningNftokenId] = useState<string | null>(null);
 
+  // Set page title
+  useEffect(() => {
+    document.title = "NFT Operations - XRPL Stablecoin POC";
+  }, []);
+
   // Load NFTs and balances on mount
   useEffect(() => {
     if (wallets) {

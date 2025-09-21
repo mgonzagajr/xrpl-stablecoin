@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-
-const IDEMPOTENCY_LOG_PATH = path.join(process.cwd(), 'data', 'idempotency.json');
+import { loadData, saveData } from '@/lib/vercel-storage';
 
 interface IdempotencyEntry {
   prefix: string;
@@ -25,11 +22,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read existing data
+    // Load existing data
     let data: IdempotencyData = { entries: [] };
-    if (fs.existsSync(IDEMPOTENCY_LOG_PATH)) {
-      const fileContent = fs.readFileSync(IDEMPOTENCY_LOG_PATH, 'utf8');
-      data = JSON.parse(fileContent);
+    const existingData = await loadData<IdempotencyData>('idempotency.json');
+    if (existingData) {
+      data = existingData;
     }
 
     // Find existing entry for this prefix
@@ -50,11 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save updated data
-    const dir = path.dirname(IDEMPOTENCY_LOG_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(IDEMPOTENCY_LOG_PATH, JSON.stringify(data, null, 2));
+    await saveData('idempotency.json', data);
 
     // Return the generated key
     const key = `${prefix}-${existingEntry.lastId.toString().padStart(3, '0')}`;

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Client } from 'xrpl';
-import fs from 'fs';
-import path from 'path';
+import { getWebSocketUrl } from '@/lib/network-config';
+import { loadData } from '@/lib/vercel-storage';
 
 interface WalletData {
   version: number;
@@ -31,20 +31,18 @@ interface BalancesResponse {
 
 export async function GET() {
   try {
-    // Read wallets
-    const walletsPath = path.join(process.cwd(), 'data', 'wallets.json');
-    if (!fs.existsSync(walletsPath)) {
+    // Load wallets from storage (Vercel Blob in production, local file in development)
+    const walletsData = await loadData<WalletData>('wallets.json');
+    if (!walletsData) {
       return NextResponse.json(
         { ok: false, error: 'MISSING_WALLETS_STORE' },
         { status: 500 }
       );
     }
-
-    const walletsData: WalletData = JSON.parse(fs.readFileSync(walletsPath, 'utf8'));
     const currencyCode = process.env.XRPL_CURRENCY_CODE || 'SBR';
 
-    // Environment variables
-    const wsUrl = process.env.XRPL_WS_URL || 'wss://s.altnet.rippletest.net:51233';
+    // Get WebSocket URL from network config
+    const wsUrl = getWebSocketUrl();
 
     // Connect to XRPL
     const client = new Client(wsUrl);

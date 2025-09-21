@@ -2,15 +2,11 @@ import { NextResponse } from 'next/server';
 import { Client, Wallet as XrplWallet } from 'xrpl';
 import { WalletData, ApiResponse, WalletsApiData } from '@/types/wallet';
 import { saveData, loadData } from '@/lib/vercel-storage';
+import { getWebSocketUrl, hasFaucet } from '@/lib/network-config';
 
 function validateEnvironment(): { isValid: boolean; error?: string } {
-  const wsUrl = process.env.XRPL_WS_URL;
   const network = process.env.XRPL_NETWORK;
   const sourceTag = process.env.XRPL_SOURCE_TAG;
-
-  if (!wsUrl) {
-    return { isValid: false, error: 'XRPL_WS_URL environment variable is required' };
-  }
 
   if (!network || !['TESTNET', 'MAINNET'].includes(network)) {
     return { isValid: false, error: 'XRPL_NETWORK must be either TESTNET or MAINNET' };
@@ -29,14 +25,15 @@ function validateEnvironment(): { isValid: boolean; error?: string } {
 }
 
 async function generateWallets(): Promise<WalletData> {
-  const client = new Client(process.env.XRPL_WS_URL!);
+  const wsUrl = getWebSocketUrl();
+  const client = new Client(wsUrl);
   
   try {
     await client.connect();
     
     const roles: Array<'issuer' | 'hot' | 'seller' | 'buyer'> = ['issuer', 'hot', 'seller', 'buyer'];
     const network = process.env.XRPL_NETWORK as 'TESTNET' | 'MAINNET';
-    const autoFaucet = process.env.XRPL_AUTO_FAUCET === 'true';
+    const autoFaucet = process.env.XRPL_AUTO_FAUCET === 'true' && hasFaucet();
     
     const wallets = await Promise.all(
       roles.map(async (role) => {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, Wallet } from 'xrpl';
-import fs from 'fs';
-import path from 'path';
+import { getWebSocketUrl } from '@/lib/network-config';
+import { loadData, saveData } from '@/lib/vercel-storage';
 import { ensureFunded } from '@/lib/xrpl-helpers';
 import { ensureIssuerAuthorization } from '@/lib/issuer-auth';
 
@@ -32,38 +32,40 @@ interface DistributeResponse {
   to: string;
 }
 
-// Simple idempotency storage (POC only)
-const TX_LOG_PATH = path.join(process.cwd(), 'data', 'txlog.json');
+// Idempotency storage using Vercel Blob
 
 function validateAmount(amount: string): boolean {
   const num = parseFloat(amount);
   return !isNaN(num) && num > 0 && /^\d+(\.\d+)?$/.test(amount);
 }
 
-function checkIdempotency(kind: string, key: string): string | null {
+interface TransactionLogEntry {
+  kind: string;
+  key: string;
+  txHash: string;
+  at: string;
+}
+
+async function checkIdempotency(kind: string, key: string): Promise<string | null> {
   try {
-    if (!fs.existsSync(TX_LOG_PATH)) {
+    const txLog = await loadData<TransactionLogEntry[]>('txlog.json');
+    if (!txLog) {
       return null;
     }
     
-    const txLog = JSON.parse(fs.readFileSync(TX_LOG_PATH, 'utf8'));
-    const entry = txLog.find((entry: { kind: string; key: string }) => entry.kind === kind && entry.key === key);
+    const entry = txLog.find((entry: TransactionLogEntry) => entry.kind === kind && entry.key === key);
     return entry?.txHash || null;
   } catch {
     return null;
   }
 }
 
-function logTransaction(kind: string, key: string, txHash: string) {
+async function logTransaction(kind: string, key: string, txHash: string) {
   try {
-    const dataDir = path.dirname(TX_LOG_PATH);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-
-    let txLog = [];
-    if (fs.existsSync(TX_LOG_PATH)) {
-      txLog = JSON.parse(fs.readFileSync(TX_LOG_PATH, 'utf8'));
+    let txLog: TransactionLogEntry[] = [];
+    const existingLog = await loadData<TransactionLogEntry[]>('txlog.json');
+    if (existingLog) {
+      txLog = existingLog;
     }
 
     txLog.push({
@@ -73,7 +75,7 @@ function logTransaction(kind: string, key: string, txHash: string) {
       at: new Date().toISOString()
     });
 
-    fs.writeFileSync(TX_LOG_PATH, JSON.stringify(txLog, null, 2));
+    await saveData('txlog.json', txLog);
   } catch (error) {
     console.warn('Failed to log transaction:', error);
   }
@@ -95,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Check idempotency
     if (idempotencyKey) {
-      const existingTxHash = checkIdempotency('distribute', idempotencyKey);
+      const existingTxHash = await checkIdempotency('distribute', idempotencyKey);
       if (existingTxHash) {
         return NextResponse.json({
           ok: true,
@@ -110,16 +112,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Read wallets
-    const walletsPath = path.join(process.cwd(), 'data', 'wallets.json');
-    if (!fs.existsSync(walletsPath)) {
+    // Load wallets from storage (Vercel Blob in production, local file in development)
+    const walletsData = await loadData<WalletData>('wallets.json');
+    if (!walletsData) {
       return NextResponse.json(
         { ok: false, error: 'MISSING_WALLETS_STORE' },
         { status: 500 }
       );
     }
-
-    const walletsData: WalletData = JSON.parse(fs.readFileSync(walletsPath, 'utf8'));
     const hotWallet = walletsData.wallets.find(w => w.role === 'hot');
     const buyerWallet = walletsData.wallets.find(w => w.role === 'buyer');
     const issuerWallet = walletsData.wallets.find(w => w.role === 'issuer');
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Environment variables
-    const wsUrl = process.env.XRPL_WS_URL || 'wss://s.altnet.rippletest.net:51233';
+    const wsUrl = getWebSocketUrl();
     const sourceTag = Number(process.env.XRPL_SOURCE_TAG) || 0;
     const currencyCode = process.env.XRPL_CURRENCY_CODE || 'SBR';
     const minXrp = Number(process.env.XRPL_MIN_XRP) || 10;
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
         
         // Log transaction for idempotency
         if (idempotencyKey) {
-          logTransaction('distribute', idempotencyKey, txHash);
+          await logTransaction('distribute', idempotencyKey, txHash);
         }
 
         await client.disconnect();

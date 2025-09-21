@@ -1,5 +1,11 @@
 import Link from "next/link";
 import Header from "@/components/Header";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Home - XRPL Stablecoin POC",
+  description: "A complete Proof of Concept for XRPL wallet management, stablecoin operations, and NFT marketplace with XLS-20 support.",
+};
 
 export default function Home() {
   return (

@@ -174,6 +174,11 @@ export default function NFTGalleryPage() {
     }
   }, [metadataCache, failedMetadata]);
 
+  // Set page title
+  useEffect(() => {
+    document.title = "NFT Gallery - XRPL Stablecoin POC";
+  }, []);
+
   // Load NFTs on mount
   useEffect(() => {
     if (wallets) {

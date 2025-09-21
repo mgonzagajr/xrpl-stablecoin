@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
+import { getWebSocketUrl } from '@/lib/network-config';
 import { Client, Wallet, AccountSet } from 'xrpl';
 import * as xrpl from 'xrpl';
-import fs from 'fs';
-import path from 'path';
+import { loadData, saveData } from '@/lib/vercel-storage';
 import { ensureFunded } from '@/lib/xrpl-helpers';
 
 interface WalletData {
@@ -61,16 +61,14 @@ interface IssuerFlagsResponse {
 
 export async function POST() {
   try {
-    // Read wallets from file
-    const walletsPath = path.join(process.cwd(), 'data', 'wallets.json');
-    if (!fs.existsSync(walletsPath)) {
+    // Load wallets from storage (Vercel Blob in production, local file in development)
+    const walletsData = await loadData<WalletData>('wallets.json');
+    if (!walletsData) {
       return NextResponse.json(
         { ok: false, error: 'MISSING_WALLETS_STORE' },
         { status: 500 }
       );
     }
-
-    const walletsData: WalletData = JSON.parse(fs.readFileSync(walletsPath, 'utf8'));
     const issuerWallet = walletsData.wallets.find(w => w.role === 'issuer');
     
     if (!issuerWallet) {
@@ -81,7 +79,7 @@ export async function POST() {
     }
 
     // Environment variables
-    const wsUrl = process.env.XRPL_WS_URL || 'wss://s.altnet.rippletest.net:51233';
+    const wsUrl = getWebSocketUrl();
     const sourceTag = Number(process.env.XRPL_SOURCE_TAG) || 0;
     const requireAuth = process.env.XRPL_REQUIRE_AUTH === 'true';
     const noFreeze = process.env.XRPL_NO_FREEZE === 'true';
@@ -191,8 +189,8 @@ export async function POST() {
         }
       };
 
-      // Save updated configuration to wallets.json
-      fs.writeFileSync(walletsPath, JSON.stringify(updatedWalletsData, null, 2));
+      // Save updated configuration to storage
+      await saveData('wallets.json', updatedWalletsData);
 
       const response: IssuerFlagsResponse = {
         issuer: {

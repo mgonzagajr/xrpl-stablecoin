@@ -92,17 +92,25 @@ src/
 
 ### Variáveis de Ambiente
 
-Copie o arquivo `.env.example` para `.env.local` e ajuste conforme necessário:
+#### Configuração Rápida
 
+Para **TESTNET** (recomendado para desenvolvimento):
 ```bash
-cp .env.example .env.local
+cp .env.testnet .env.local
 ```
+
+Para **MAINNET** (⚠️ use com cuidado):
+```bash
+cp .env.mainnet .env.local
+```
+
+#### Configuração Manual
 
 Ou crie manualmente o arquivo `.env.local` com as seguintes variáveis:
 
 ```bash
 # XRPL Configuration
-XRPL_WS_URL=wss://s.altnet.rippletest.net:51233
+# XRPL_WS_URL é automaticamente definida baseada em XRPL_NETWORK
 XRPL_NETWORK=TESTNET
 XRPL_SOURCE_TAG=846813574
 
@@ -118,6 +126,15 @@ XRPL_MIN_XRP=20
 XRPL_DEFAULT_ISSUE=1000000
 XRPL_DEFAULT_DISTRIBUTE=100
 ```
+
+#### Configuração Automática de Rede
+
+O sistema agora detecta automaticamente a URL da rede baseada na variável `XRPL_NETWORK`:
+
+- **TESTNET**: `wss://s.altnet.rippletest.net:51233`
+- **MAINNET**: `wss://xrplcluster.com`
+
+Você não precisa mais configurar `XRPL_WS_URL` manualmente! 🎉
 
 ### Instalação
 

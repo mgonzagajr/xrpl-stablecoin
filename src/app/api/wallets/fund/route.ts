@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'xrpl';
+import { getWebSocketUrl, hasFaucet } from '@/lib/network-config';
 import fs from 'fs';
 import path from 'path';
 
@@ -55,15 +56,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Environment variables
-    const wsUrl = process.env.XRPL_WS_URL || 'wss://s.altnet.rippletest.net:51233';
-    const network = process.env.XRPL_NETWORK || 'TESTNET';
-    const autoFaucet = process.env.XRPL_AUTO_FAUCET === 'true';
+    // Get network configuration
+    const wsUrl = getWebSocketUrl();
+    const autoFaucet = process.env.XRPL_AUTO_FAUCET === 'true' && hasFaucet();
 
-    // Only allow funding on TESTNET with auto-faucet enabled
-    if (network !== 'TESTNET' || !autoFaucet) {
+    // Only allow funding on networks with faucet enabled
+    if (!hasFaucet() || !autoFaucet) {
       return NextResponse.json(
-        { ok: false, error: 'Funding only available on TESTNET with XRPL_AUTO_FAUCET=true' },
+        { ok: false, error: 'Funding only available on networks with faucet enabled' },
         { status: 400 }
       );
     }

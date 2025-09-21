@@ -1,0 +1,610 @@
+'use client';
+
+import { useWallets } from '@/hooks/useWallets';
+import { useXrplOperations } from '@/hooks/useXrplOperations';
+import { useStablecoinOperations } from '@/hooks/useStablecoinOperations';
+import { useConfig } from '@/hooks/useConfig';
+import { useToast } from '@/hooks/useToast';
+import { CopyButton } from '@/components/CopyButton';
+import ToastContainer from '@/components/ToastContainer';
+import { generateIdempotencyKey } from '@/lib/idempotency-helper';
+
+export default function SetupPage() {
+  const { wallets, balances, configuration, loading, error, initializeWallets, refreshWallets, refreshBalances, fundWallet } = useWallets();
+  const { config } = useConfig();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const {
+    issueLoading,
+    issue,
+    distributeLoading,
+    distribute,
+    balancesLoading,
+    balancesData,
+    balancesError,
+    fetchBalances
+  } = useStablecoinOperations();
+  
+  // Get minimum XRP from config (default to 10)
+  const minXrp = config?.minXrp || 10;
+  const {
+    issuerFlagsLoading,
+    issuerFlagsData,
+    issuerFlagsError,
+    setIssuerFlags,
+    resetIssuerFlags,
+    trustLinesLoading,
+    trustLinesData,
+    trustLinesError,
+    createTrustLines,
+    resetTrustLines,
+    clearCache
+  } = useXrplOperations();
+
+  const handleInitialize = async () => {
+    await initializeWallets();
+  };
+
+  const handleRefresh = async () => {
+    await refreshWallets();
+  };
+
+  return (
+    <div className="min-h-screen bg-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">XRPL Wallets Setup</h1>
+          <a
+            href="/nft"
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer"
+          >
+            NFT Operations →
+          </a>
+        </div>
+        
+        {/* Initialization Card */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Initialization</h2>
+          
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+          
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleInitialize}
+              disabled={loading}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              {loading ? 'Initializing...' : 'Initialize wallets'}
+            </button>
+            
+            {wallets && (
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Refresh
+              </button>
+            )}
+          </div>
+          
+          {wallets && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Wallets initialized successfully! All wallets are funded on TESTNET.
+              </p>
+              <button
+                onClick={refreshBalances}
+                disabled={loading}
+                className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 transition-colors cursor-pointer"
+                title="Refresh all balances"
+              >
+                Refresh Balances
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Wallets Card */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Wallets</h2>
+          
+          {/* Funding Info */}
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h3 className="text-sm font-medium text-blue-900 mb-2">💡 Funding Information</h3>
+            <div className="text-sm text-blue-800 space-y-1">
+              <p>• <strong>TESTNET:</strong> Wallets are automatically funded with faucet</p>
+              <p>• <strong>MAINNET:</strong> You need to fund wallets manually with real XRP</p>
+              <p>• <strong>Minimum XRP:</strong> {minXrp} XRP required for transactions</p>
+            </div>
+          </div>
+          
+          {wallets ? (
+            <div>
+              {/* Network and Source Tag Info */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-700">Network:</span>
+                    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                      {wallets.network}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Source Tag:</span>
+                    <span className="ml-2 font-mono text-gray-900">{wallets.sourceTag}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Wallets Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Role</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Address</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Balance</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wallets.wallets.map((wallet) => {
+                      const balance = balances?.balances.find(b => b.role === wallet.role);
+                      return (
+                      <tr key={wallet.role} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {wallet.role}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-sm text-gray-900">
+                          {wallet.address}
+                        </td>
+                        <td className="py-3 px-4">
+                            {balance ? (
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm text-gray-900">
+                                  {balance.balanceXrp?.toFixed(6) || '0.000000'} XRP
+                                </span>
+                                {balance.balanceXrp && balance.balanceXrp < minXrp && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    Needs Funding
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">Loading...</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                          <CopyButton text={wallet.address} />
+                              <button
+                                onClick={refreshBalances}
+                                className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded cursor-pointer"
+                                title="Refresh balance"
+                              >
+                                🔄
+                              </button>
+                              {balance && balance.balanceXrp < minXrp && (
+                                <button
+                                  onClick={async () => {
+                                    const result = await fundWallet(wallet.role);
+                                    if (result.success) {
+                                      showSuccess(`${wallet.role} wallet funded successfully!`);
+                                    } else {
+                                      showError(`Failed to fund ${wallet.role} wallet`, result.error);
+                                    }
+                                  }}
+                                  className="px-2 py-1 text-xs bg-green-100 text-green-800 hover:bg-green-200 rounded cursor-pointer"
+                                  title="Fund wallet with faucet"
+                                >
+                                  💰 Fund
+                                </button>
+                              )}
+                            </div>
+                        </td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="text-gray-400 mb-4">
+                <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+              </div>
+              <p className="text-sm">Click &quot;Initialize wallets&quot; above to get started.</p>
+            </div>
+          )}
+        </div>
+
+        {/* XRPL Configuration Card */}
+        {wallets && (
+          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">XRPL Configuration</h2>
+            
+            {/* Status Overview */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-blue-900">Configuration Status</h3>
+                <button
+                  onClick={clearCache}
+                  className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors cursor-pointer"
+                  title="Clear cached status data"
+                >
+                  Clear Cache
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-700">Issuer Flags:</span>
+                  {configuration?.issuerFlags?.configured ? (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✅ Configured
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      ⏳ Not configured
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-700">Trust Lines:</span>
+                  {configuration?.trustLines?.configured ? (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✅ Created
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      ⏳ Not created
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Issuer Flags Section */}
+            <div className="mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-3">Issuer Flags</h3>
+
+              {issuerFlagsError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                  {issuerFlagsError}
+                </div>
+              )}
+              
+              <div className="flex items-center gap-4 mb-3">
+                <button
+                  onClick={setIssuerFlags}
+                  disabled={issuerFlagsLoading || !wallets}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  {issuerFlagsLoading ? 'Setting flags...' : 'Set issuer flags'}
+                </button>
+                
+                {issuerFlagsData && (
+                  <button
+                    onClick={resetIssuerFlags}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              
+              {(issuerFlagsData || configuration?.issuerFlags) && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
+                  <div className="space-y-2">
+                    <div>
+                      <strong>Current flags:</strong> DefaultRipple [on],
+                      RequireAuth [{(issuerFlagsData?.issuer.flags.requireAuth ?? configuration?.issuerFlags?.flags.requireAuth) ? 'on' : 'off'}],
+                      NoFreeze [{(issuerFlagsData?.issuer.flags.noFreeze ?? configuration?.issuerFlags?.flags.noFreeze) ? 'on' : 'off'}]
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {issuerFlagsData?.changed ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          ✅ Flags updated successfully
+                        </span>
+                      ) : configuration?.issuerFlags?.configured ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          ℹ️ Already configured
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          ℹ️ No changes needed (already configured)
+                        </span>
+                      )}
+                      {issuerFlagsData?.funding?.status === 'funded' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          💰 Issuer funded with faucet
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Trust Lines Section */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-3">Trust Lines</h3>
+
+              {trustLinesError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                  {trustLinesError}
+                </div>
+              )}
+              
+              <div className="flex items-center gap-4 mb-4">
+                <button
+                  onClick={createTrustLines}
+                  disabled={trustLinesLoading || !wallets}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  {trustLinesLoading ? 'Creating trust lines...' : 'Create trust lines'}
+                </button>
+                
+                {trustLinesData && (
+                  <button
+                    onClick={resetTrustLines}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              
+              {(trustLinesData || configuration?.trustLines) && (
+                <div>
+                  <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded text-blue-700 text-sm">
+                    <strong>Currency:</strong> {trustLinesData?.currency || configuration?.trustLines?.currency} | <strong>Limit:</strong> {trustLinesData?.limit || configuration?.trustLines?.limit}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {(trustLinesData?.results || configuration?.trustLines?.results || []).map((result) => (
+                      <div key={result.role} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {result.role.toUpperCase()}
+                          </span>
+                          <span className="font-mono text-sm text-gray-900">{result.address}</span>
+                          {(result as { funding?: { status?: string } }).funding?.status === 'funded' && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              Funded with faucet
+                            </span>
+                          )}
+                          {(result as { funding?: { status?: string } }).funding?.status === 'error' && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              Insufficient balance — fund manually via <a href="https://xrpl.org/xrp-testnet-faucet.html" target="_blank" rel="noopener noreferrer" className="underline cursor-pointer">XRPL Testnet Faucet</a>
+                            </span>
+                          )}
+                        </div>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          result.created
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {result.created ? '✅ Created/Updated' : 'ℹ️ Already exists'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Stablecoin (SBR) Section */}
+        {wallets && (
+          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mt-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Stablecoin (SBR)</h2>
+            
+            {/* Issue and Distribute Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Issue Section */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-3">Issue SBR (Issuer → Hot)</h3>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Issue amount
+                    </label>
+                    <input
+                      type="text"
+                      id="issueAmount"
+                      defaultValue={config?.defaultIssue || '1000000'}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Idempotency key (optional)
+                    </label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        id="issueIdempotency"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                        placeholder="e.g., issue-001"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const input = document.getElementById('issueIdempotency') as HTMLInputElement;
+                          if (input) input.value = await generateIdempotencyKey('issue');
+                        }}
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors cursor-pointer text-sm"
+                      >
+                        Auto
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Prevents duplicate transactions if you click multiple times
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={async () => {
+                      const amount = (document.getElementById('issueAmount') as HTMLInputElement)?.value;
+                      const idempotencyKey = (document.getElementById('issueIdempotency') as HTMLInputElement)?.value;
+                      
+                      const result = await issue({ amount, idempotencyKey });
+                      if (result.success) {
+                        showSuccess(`Issued ${result.data?.amount} SBR to hot wallet!`, `TxHash: ${result.data?.txHash}`);
+                      } else {
+                        showError(`Failed to issue SBR`, result.error);
+                      }
+                    }}
+                    disabled={issueLoading}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {issueLoading ? 'Issuing...' : 'Issue SBR to hot'}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Distribute Section */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-3">Distribute SBR (Hot → Buyer)</h3>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Distribute amount
+                    </label>
+                    <input
+                      type="text"
+                      id="distributeAmount"
+                      defaultValue={config?.defaultDistribute || '100'}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Idempotency key (optional)
+                    </label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        id="distributeIdempotency"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                        placeholder="e.g., distribute-001"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const input = document.getElementById('distributeIdempotency') as HTMLInputElement;
+                          if (input) input.value = await generateIdempotencyKey('distribute');
+                        }}
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors cursor-pointer text-sm"
+                      >
+                        Auto
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Prevents duplicate transactions if you click multiple times
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={async () => {
+                      const amount = (document.getElementById('distributeAmount') as HTMLInputElement)?.value;
+                      const idempotencyKey = (document.getElementById('distributeIdempotency') as HTMLInputElement)?.value;
+                      
+                      const result = await distribute({ amount, idempotencyKey });
+                      if (result.success) {
+                        showSuccess(`Distributed ${result.data?.amount} SBR to buyer wallet!`, `TxHash: ${result.data?.txHash}`);
+                      } else {
+                        showError(`Failed to distribute SBR`, result.error);
+                      }
+                    }}
+                    disabled={distributeLoading}
+                    className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {distributeLoading ? 'Distributing...' : 'Distribute SBR to buyer'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Balances Section */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Balances</h3>
+                <button
+                  onClick={fetchBalances}
+                  disabled={balancesLoading}
+                  className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer"
+                >
+                  {balancesLoading ? 'Loading...' : 'Refresh balances'}
+                </button>
+              </div>
+              
+              {balancesData ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-2 px-3 font-medium text-gray-700">Role</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-700">Address</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-700">XRP</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-700">SBR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {balancesData.entries.map((entry) => (
+                        <tr key={entry.role} className="border-b border-gray-100">
+                          <td className="py-2 px-3">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {entry.role}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 font-mono text-sm text-gray-900">
+                            {entry.address}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-sm text-gray-900">
+                            {entry.xrp}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-sm text-gray-900">
+                            {entry.sbr || '0'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : balancesError ? (
+                <div className="text-red-600 text-sm">
+                  Error loading balances: {balancesError}
+                </div>
+              ) : (
+                <div className="text-gray-500 text-sm">
+                  Click &quot;Refresh balances&quot; to load SBR and XRP balances
+            </div>
+          )}
+        </div>
+          </div>
+        )}
+        
+        {/* Toast Container */}
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
+      </div>
+    </div>
+  );
+}
+

@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import fsSync from 'fs';
-import path from 'path';
+import { loadData } from '@/lib/vercel-storage';
 import { WalletData, ApiResponse } from '@/types/wallet';
-
-const WALLETS_FILE_PATH = path.join(process.cwd(), 'data', 'wallets.json');
 
 export async function GET(): Promise<NextResponse<ApiResponse<WalletData['configuration']>>> {
   try {
-    if (!fsSync.existsSync(WALLETS_FILE_PATH)) {
+    // Load wallets from storage (Vercel Blob in production, local file in development)
+    const walletsData = await loadData<WalletData>('wallets.json');
+    if (!walletsData) {
       return NextResponse.json(
         { ok: false, error: 'NOT_INITIALIZED' },
         { status: 404 }
       );
     }
-
-    const existingData = await fs.readFile(WALLETS_FILE_PATH, 'utf-8');
-    const walletsData: WalletData = JSON.parse(existingData);
 
     return NextResponse.json({ 
       ok: true, 

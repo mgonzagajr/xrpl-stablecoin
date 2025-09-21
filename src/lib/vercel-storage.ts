@@ -14,6 +14,7 @@ export async function saveData(filename: string, data: unknown): Promise<void> {
     await put(filename, jsonData, {
       access: 'public',
       contentType: 'application/json',
+      allowOverwrite: true, // Permitir sobrescrita de arquivos existentes
     });
   } else {
     // Em desenvolvimento: usar sistema de arquivos local

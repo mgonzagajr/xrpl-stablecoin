@@ -85,6 +85,7 @@ export function useXrplOperations() {
   const saveIssuerFlagsToCache = (data: IssuerFlagsData) => {
     try {
       // Remove _cached flag before saving
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { _cached, ...dataToSave } = data;
       localStorage.setItem(ISSUER_FLAGS_CACHE_KEY, JSON.stringify(dataToSave));
     } catch (error) {
@@ -95,6 +96,7 @@ export function useXrplOperations() {
   const saveTrustLinesToCache = (data: TrustLinesData) => {
     try {
       // Remove _cached flag before saving
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { _cached, ...dataToSave } = data;
       localStorage.setItem(TRUST_LINES_CACHE_KEY, JSON.stringify(dataToSave));
     } catch (error) {

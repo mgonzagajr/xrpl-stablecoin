@@ -81,7 +81,7 @@ export async function GET() {
               if (sbrTrustLine) {
                 sbrBalance = sbrTrustLine.balance;
               }
-            } catch (err) {
+            } catch {
               // If no trust lines or error, balance remains '0'
               console.log(`No trust lines found for ${wallet.address}`);
             }

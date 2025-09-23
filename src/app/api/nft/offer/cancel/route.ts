@@ -84,19 +84,31 @@ export async function POST(request: NextRequest) {
 
       console.log('Canceling NFT offer with transaction:', JSON.stringify(cancelTransaction, null, 2));
 
-      // Submit transaction
-      const response = await client.submit(cancelTransaction, { wallet: sellerWallet });
+      // Submit transaction - use submitAndWait for Mainnet reliability
+      let response;
+      let txHash;
       
-      console.log('Offer cancellation response:', JSON.stringify(response.result, null, 2));
-      
-      if (response.result.engine_result !== 'tesSUCCESS') {
-        return NextResponse.json(
-          { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
-          { status: 400 }
-        );
+      if (process.env.XRPL_NETWORK === 'MAINNET') {
+        // Use submitAndWait for Mainnet - more reliable
+        const prepared = await client.autofill(cancelTransaction);
+        const signed = sellerWallet.sign(prepared);
+        response = await client.submitAndWait(signed.tx_blob);
+        txHash = response.result.hash;
+        console.log('Mainnet cancel transaction submitted and validated:', txHash);
+      } else {
+        // Use regular submit for Testnet
+        response = await client.submit(cancelTransaction, { wallet: sellerWallet });
+        console.log('Offer cancellation response:', JSON.stringify(response.result, null, 2));
+        
+        if (response.result.engine_result !== 'tesSUCCESS') {
+          return NextResponse.json(
+            { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
+            { status: 400 }
+          );
+        }
+        txHash = response.result.tx_json.hash;
       }
 
-      const txHash = response.result.tx_json.hash;
 
       // Log the offer cancellation
       if (idempotencyKey) {

@@ -15,6 +15,7 @@ interface IssuerFlagsData {
     address: string;
     balanceXrp?: number;
   };
+  _cached?: boolean;
 }
 
 interface TrustLineResult {
@@ -33,6 +34,7 @@ interface TrustLinesData {
   currency: string;
   limit: string;
   results: TrustLineResult[];
+  _cached?: boolean;
 }
 
 interface ApiResponse<T> {
@@ -52,20 +54,24 @@ export function useXrplOperations() {
   const [issuerFlagsError, setIssuerFlagsError] = useState<string | null>(null);
   const [trustLinesError, setTrustLinesError] = useState<string | null>(null);
 
-  // Load cached data on mount
+  // Load cached data on mount (but don't show as configured)
   useEffect(() => {
     const loadCachedData = () => {
       try {
         // Load issuer flags data
         const cachedIssuerFlags = localStorage.getItem(ISSUER_FLAGS_CACHE_KEY);
         if (cachedIssuerFlags) {
-          setIssuerFlagsData(JSON.parse(cachedIssuerFlags));
+          const data = JSON.parse(cachedIssuerFlags);
+          // Mark as cached data, not fresh configuration
+          setIssuerFlagsData({ ...data, _cached: true });
         }
 
         // Load trust lines data
         const cachedTrustLines = localStorage.getItem(TRUST_LINES_CACHE_KEY);
         if (cachedTrustLines) {
-          setTrustLinesData(JSON.parse(cachedTrustLines));
+          const data = JSON.parse(cachedTrustLines);
+          // Mark as cached data, not fresh configuration
+          setTrustLinesData({ ...data, _cached: true });
         }
       } catch (error) {
         console.warn('Failed to load cached XRPL operations data:', error);
@@ -78,7 +84,9 @@ export function useXrplOperations() {
   // Helper functions for cache management
   const saveIssuerFlagsToCache = (data: IssuerFlagsData) => {
     try {
-      localStorage.setItem(ISSUER_FLAGS_CACHE_KEY, JSON.stringify(data));
+      // Remove _cached flag before saving
+      const { _cached, ...dataToSave } = data;
+      localStorage.setItem(ISSUER_FLAGS_CACHE_KEY, JSON.stringify(dataToSave));
     } catch (error) {
       console.warn('Failed to save issuer flags to cache:', error);
     }
@@ -86,7 +94,9 @@ export function useXrplOperations() {
 
   const saveTrustLinesToCache = (data: TrustLinesData) => {
     try {
-      localStorage.setItem(TRUST_LINES_CACHE_KEY, JSON.stringify(data));
+      // Remove _cached flag before saving
+      const { _cached, ...dataToSave } = data;
+      localStorage.setItem(TRUST_LINES_CACHE_KEY, JSON.stringify(dataToSave));
     } catch (error) {
       console.warn('Failed to save trust lines to cache:', error);
     }

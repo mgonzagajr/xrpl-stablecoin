@@ -35,6 +35,7 @@ interface UseWalletsReturn {
   refreshWallets: () => Promise<void>;
   refreshBalances: () => Promise<void>;
   fundWallet: (role: string) => Promise<{ success: boolean; error?: string }>;
+  clearCache: () => void;
 }
 
 export function useWallets(): UseWalletsReturn {
@@ -111,6 +112,16 @@ export function useWallets(): UseWalletsReturn {
       if (result.ok && result.data) {
         setWallets(result.data);
         saveToCache(result.data);
+        // Load balances after wallets are initialized
+        try {
+          const response = await fetch('/api/wallets/balances');
+          const result = await response.json();
+          if (result.ok && result.data) {
+            setBalances(result.data);
+          }
+        } catch (err) {
+          console.error('Failed to load balances after initialization:', err);
+        }
       } else {
         throw new Error(result.error || 'Failed to initialize wallets');
       }
@@ -133,6 +144,8 @@ export function useWallets(): UseWalletsReturn {
         saveToCache(data);
       } else {
         setWallets(null);
+        // Clear cache when no wallets exist
+        localStorage.removeItem(CACHE_KEY);
       }
       
       // Also fetch configuration status
@@ -148,10 +161,12 @@ export function useWallets(): UseWalletsReturn {
 
   const refreshBalances = useCallback(async () => {
     try {
+      console.log('Loading balances...');
       const response = await fetch('/api/wallets/balances');
       const result: ApiResponse<BalancesApiData> = await response.json();
 
       if (result.ok && result.data) {
+        console.log('Balances loaded successfully:', result.data);
         setBalances(result.data);
       } else {
         console.error('Failed to load balances:', result.error);
@@ -185,6 +200,14 @@ export function useWallets(): UseWalletsReturn {
     }
   }, [refreshBalances]);
 
+  const clearCache = useCallback(() => {
+    localStorage.removeItem(CACHE_KEY);
+    setWallets(null);
+    setBalances(null);
+    setConfiguration(null);
+    setError(null);
+  }, []);
+
   // Load wallets on mount
   useEffect(() => {
     const cached = loadFromCache();
@@ -208,6 +231,7 @@ export function useWallets(): UseWalletsReturn {
     initializeWallets,
     refreshWallets,
     refreshBalances,
-    fundWallet
+    fundWallet,
+    clearCache
   };
 }

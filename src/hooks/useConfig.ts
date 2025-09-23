@@ -11,6 +11,12 @@ interface ConfigData {
   sourceTag: number;
   defaultIssue: string;
   defaultDistribute: string;
+  networkInfo: {
+    name: string;
+    description: string;
+    hasFaucet: boolean;
+    minReserve: number;
+  };
 }
 
 interface UseConfigReturn {

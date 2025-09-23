@@ -143,53 +143,78 @@ export async function POST(request: NextRequest) {
 
       console.log('Creating NFT offer with transaction:', JSON.stringify(offerTransaction, null, 2));
 
-      // Submit transaction
-      const response = await client.submit(offerTransaction, { wallet: sellerWallet });
+      // Submit transaction - use submitAndWait for Mainnet reliability
+      let response;
+      let txHash;
       
-      console.log('Offer creation response:', JSON.stringify(response.result, null, 2));
-      
-      if (response.result.engine_result !== 'tesSUCCESS') {
-        return NextResponse.json(
-          { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
-          { status: 400 }
-        );
+      if (process.env.XRPL_NETWORK === 'MAINNET') {
+        // Use submitAndWait for Mainnet - more reliable
+        const prepared = await client.autofill(offerTransaction);
+        const signed = sellerWallet.sign(prepared);
+        response = await client.submitAndWait(signed.tx_blob);
+        txHash = response.result.hash;
+        console.log('Mainnet offer transaction submitted and validated:', txHash);
+      } else {
+        // Use regular submit for Testnet
+        response = await client.submit(offerTransaction, { wallet: sellerWallet });
+        console.log('Offer creation response:', JSON.stringify(response.result, null, 2));
+        
+        if (response.result.engine_result !== 'tesSUCCESS') {
+          return NextResponse.json(
+            { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
+            { status: 400 }
+          );
+        }
+        txHash = response.result.tx_json.hash;
       }
 
-      // Get offer index from transaction metadata (wait for validation)
-      const txHash = response.result.tx_json.hash;
+      // Extract offer index from transaction metadata
+      let offerIndex: string | undefined;
       
-      // Wait for transaction to be validated
-      let attempts = 0;
-      let txResult;
-      
-      do {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        txResult = await client.request({
-          command: 'tx',
-          transaction: txHash,
-        });
-        attempts++;
-        console.log(`Offer create attempt ${attempts}: validated = ${txResult.result.validated}`);
-      } while (!txResult.result.validated && attempts < 10);
+      if (process.env.XRPL_NETWORK === 'MAINNET') {
+        // For Mainnet, use the response from submitAndWait directly
+        const meta = (response.result as { meta?: { offer_id?: string; AffectedNodes?: Array<{ CreatedNode?: { LedgerEntryType?: string; LedgerIndex?: string } }> } }).meta;
+        offerIndex = meta?.offer_id || meta?.AffectedNodes?.find((node: { CreatedNode?: { LedgerEntryType?: string; LedgerIndex?: string } }) => 
+          node.CreatedNode?.LedgerEntryType === 'NFTokenOffer'
+        )?.CreatedNode?.LedgerIndex;
+      } else {
+        // For Testnet, wait for validation
+        let attempts = 0;
+        let txResult;
+        
+        do {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          txResult = await client.request({
+            command: 'tx',
+            transaction: txHash,
+          });
+          attempts++;
+          console.log(`Offer create attempt ${attempts}: validated = ${txResult.result.validated}`);
+        } while (!txResult.result.validated && attempts < 10);
 
-      if (!txResult.result.validated) {
-        return NextResponse.json(
-          { ok: false, error: 'TRANSACTION_NOT_VALIDATED', details: 'Transaction was not validated within timeout' },
-          { status: 400 }
-        );
+        if (!txResult.result.validated) {
+          return NextResponse.json(
+            { ok: false, error: 'TRANSACTION_NOT_VALIDATED', details: 'Transaction was not validated within timeout' },
+            { status: 400 }
+          );
+        }
+
+        const meta = txResult.result.meta as { offer_id?: string; AffectedNodes?: Array<{ CreatedNode?: { LedgerEntryType?: string; LedgerIndex?: string } }> };
+        offerIndex = meta?.offer_id || meta?.AffectedNodes?.find((node: { CreatedNode?: { LedgerEntryType?: string; LedgerIndex?: string } }) => 
+          node.CreatedNode?.LedgerEntryType === 'NFTokenOffer'
+        )?.CreatedNode?.LedgerIndex;
       }
-
-      const meta = txResult.result.meta as { offer_id?: string; AffectedNodes?: Array<{ CreatedNode?: { LedgerEntryType?: string; LedgerIndex?: string } }> };
-      const offerIndex = meta?.offer_id || meta?.AffectedNodes?.find((node: { CreatedNode?: { LedgerEntryType?: string; LedgerIndex?: string } }) => 
-        node.CreatedNode?.LedgerEntryType === 'NFTokenOffer'
-      )?.CreatedNode?.LedgerIndex;
 
       if (!offerIndex) {
         console.error('OFFER_CREATE_FAILED: Could not extract offer index from transaction metadata');
-        console.error('Transaction metadata:', JSON.stringify(meta, null, 2));
-        console.error('Transaction result:', JSON.stringify(txResult.result, null, 2));
+        console.error('Transaction response:', JSON.stringify(response.result, null, 2));
         return NextResponse.json(
-          { ok: false, error: 'OFFER_CREATE_FAILED', details: 'Could not extract offer index from transaction metadata' },
+          { 
+            ok: false, 
+            error: 'OFFER_CREATE_FAILED', 
+            details: 'Could not extract offer index from transaction metadata',
+            txHash
+          },
           { status: 400 }
         );
       }

@@ -102,53 +102,92 @@ export async function POST(request: NextRequest) {
 
       console.log('Minting NFT with transaction:', JSON.stringify(mintTransaction, null, 2));
 
-      // Submit transaction
-      const response = await client.submit(mintTransaction, { wallet: sellerWallet });
+      // Submit transaction - use submitAndWait for Mainnet reliability
+      let response;
+      let txHash;
       
-      console.log('Transaction submission response:', JSON.stringify(response.result, null, 2));
-      
-      if (response.result.engine_result !== 'tesSUCCESS') {
-        return NextResponse.json(
-          { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
-          { status: 400 }
-        );
+      if (process.env.XRPL_NETWORK === 'MAINNET') {
+        // Use submitAndWait for Mainnet - more reliable
+        const prepared = await client.autofill(mintTransaction);
+        const signed = sellerWallet.sign(prepared);
+        response = await client.submitAndWait(signed.tx_blob);
+        txHash = response.result.hash;
+        console.log('Mainnet transaction submitted and validated:', txHash);
+      } else {
+        // Use regular submit for Testnet
+        response = await client.submit(mintTransaction, { wallet: sellerWallet });
+        console.log('Transaction submission response:', JSON.stringify(response.result, null, 2));
+        
+        if (response.result.engine_result !== 'tesSUCCESS') {
+          return NextResponse.json(
+            { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
+            { status: 400 }
+          );
+        }
+        txHash = response.result.tx_json.hash;
       }
-
-      // Get NFTokenID from transaction metadata (wait for validation)
-      const txHash = response.result.tx_json.hash;
       
-      // Wait for transaction to be validated
-      let attempts = 0;
-      let txResult;
+      // Extract NFTokenID from transaction metadata
+      let nftokenId: string | undefined;
       
-      do {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        txResult = await client.request({
-          command: 'tx',
-          transaction: txHash,
-        });
-        attempts++;
-        console.log(`Attempt ${attempts}: validated = ${txResult.result.validated}`);
-      } while (!txResult.result.validated && attempts < 10);
+      if (process.env.XRPL_NETWORK === 'MAINNET') {
+        // For Mainnet, use the response from submitAndWait directly
+        const meta = (response.result as { meta?: { nftoken_id?: string; AffectedNodes?: Array<{ CreatedNode?: { LedgerEntryType?: string; NewFields?: { NFTokenID?: string } } }> } }).meta;
+        nftokenId = meta?.nftoken_id || meta?.AffectedNodes?.find((node: { CreatedNode?: { LedgerEntryType?: string; NewFields?: { NFTokenID?: string } } }) => 
+          node.CreatedNode?.LedgerEntryType === 'NFToken'
+        )?.CreatedNode?.NewFields?.NFTokenID;
+      } else {
+        // For Testnet, wait for validation
+        let attempts = 0;
+        let txResult;
+        let lastError;
+        
+        do {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          try {
+            txResult = await client.request({
+              command: 'tx',
+              transaction: txHash,
+            });
+            attempts++;
+            console.log(`Attempt ${attempts}: validated = ${txResult.result.validated}`);
+        } catch (error) {
+          lastError = error;
+          attempts++;
+          console.log(`Attempt ${attempts}: Error fetching transaction - ${error instanceof Error ? error.message : 'Unknown error'}`);
+          txResult = { result: { validated: false } };
+        }
+        } while (!txResult.result.validated && attempts < 10);
 
-      if (!txResult.result.validated) {
-        return NextResponse.json(
-          { ok: false, error: 'TRANSACTION_NOT_VALIDATED', details: 'Transaction was not validated within timeout' },
-          { status: 400 }
-        );
+        if (!txResult.result.validated) {
+          console.error('Transaction validation timeout:', lastError instanceof Error ? lastError.message : 'Unknown error');
+          return NextResponse.json(
+            { 
+              ok: false, 
+              error: 'TRANSACTION_NOT_VALIDATED', 
+              details: `Transaction was not validated within timeout. Last error: ${lastError instanceof Error ? lastError.message : 'Unknown'}`,
+              txHash
+            },
+            { status: 400 }
+          );
+        }
+
+        const meta = txResult.result.meta as { nftoken_id?: string; AffectedNodes?: Array<{ CreatedNode?: { LedgerEntryType?: string; NewFields?: { NFTokenID?: string } } }> };
+        nftokenId = meta?.nftoken_id || meta?.AffectedNodes?.find((node: { CreatedNode?: { LedgerEntryType?: string; NewFields?: { NFTokenID?: string } } }) => 
+          node.CreatedNode?.LedgerEntryType === 'NFToken'
+        )?.CreatedNode?.NewFields?.NFTokenID;
       }
-
-      const meta = txResult.result.meta as { nftoken_id?: string; AffectedNodes?: Array<{ CreatedNode?: { LedgerEntryType?: string; NewFields?: { NFTokenID?: string } } }> };
-      const nftokenId = meta?.nftoken_id || meta?.AffectedNodes?.find((node: { CreatedNode?: { LedgerEntryType?: string; NewFields?: { NFTokenID?: string } } }) => 
-        node.CreatedNode?.LedgerEntryType === 'NFToken'
-      )?.CreatedNode?.NewFields?.NFTokenID;
 
       if (!nftokenId) {
         console.error('NFT_MINT_FAILED: Could not extract NFTokenID from transaction metadata');
-        console.error('Transaction metadata:', JSON.stringify(meta, null, 2));
-        console.error('Transaction result:', JSON.stringify(txResult.result, null, 2));
+        console.error('Transaction response:', JSON.stringify(response.result, null, 2));
         return NextResponse.json(
-          { ok: false, error: 'NFT_MINT_FAILED', details: 'Could not extract NFTokenID from transaction metadata' },
+          { 
+            ok: false, 
+            error: 'NFT_MINT_FAILED', 
+            details: 'Could not extract NFTokenID from transaction metadata',
+            txHash // Return the transaction hash so user can check manually
+          },
           { status: 400 }
         );
       }

@@ -4,6 +4,7 @@ import { useNFT } from '@/hooks/useNFT';
 import { useWallets } from '@/hooks/useWallets';
 import { useStablecoinOperations } from '@/hooks/useStablecoinOperations';
 import { useToast } from '@/hooks/useToast';
+import { useConfig } from '@/hooks/useConfig';
 import { CopyButton } from '@/components/CopyButton';
 import ToastContainer from '@/components/ToastContainer';
 import Header from '@/components/Header';
@@ -17,6 +18,14 @@ export default function NFTPage() {
   const { wallets, loading: walletsLoading } = useWallets();
   const { balancesData, fetchBalances } = useStablecoinOperations();
   const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { config } = useConfig();
+  
+  // Generate Bithomp Explorer link for NFT
+  const getBithompLink = (nftokenId: string) => {
+    const isTestnet = config?.network === 'TESTNET';
+    const baseUrl = isTestnet ? 'https://test.bithomp.com' : 'https://bithomp.com';
+    return `${baseUrl}/en/nft/${nftokenId}`;
+  };
   
   const {
     mintLoading,
@@ -484,7 +493,20 @@ export default function NFTPage() {
                           {nft.uri || 'N/A'}
                         </td>
                         <td className="py-2 px-3">
-                          <CopyButton text={nft.nftokenId} />
+                          <div className="flex items-center space-x-1">
+                            <CopyButton text={nft.nftokenId} />
+                            <a
+                              href={getBithompLink(nft.nftokenId)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="View on Bithomp Explorer"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -723,7 +745,20 @@ export default function NFTPage() {
                           {nft.uri || 'N/A'}
                         </td>
                         <td className="py-2 px-3">
-                          <CopyButton text={nft.nftokenId} />
+                          <div className="flex items-center space-x-1">
+                            <CopyButton text={nft.nftokenId} />
+                            <a
+                              href={getBithompLink(nft.nftokenId)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="View on Bithomp Explorer"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          </div>
                         </td>
                       </tr>
                     ))}

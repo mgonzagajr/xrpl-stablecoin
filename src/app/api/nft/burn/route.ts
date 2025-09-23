@@ -110,19 +110,31 @@ export async function POST(request: NextRequest) {
 
       console.log('Burning NFT with transaction:', JSON.stringify(burnTransaction, null, 2));
 
-      // Submit transaction
-      const response = await client.submit(burnTransaction, { wallet });
+      // Submit transaction - use submitAndWait for Mainnet reliability
+      let response;
+      let txHash;
       
-      console.log('NFT burn response:', JSON.stringify(response.result, null, 2));
-      
-      if (response.result.engine_result !== 'tesSUCCESS') {
-        return NextResponse.json(
-          { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
-          { status: 400 }
-        );
+      if (process.env.XRPL_NETWORK === 'MAINNET') {
+        // Use submitAndWait for Mainnet - more reliable
+        const prepared = await client.autofill(burnTransaction);
+        const signed = wallet.sign(prepared);
+        response = await client.submitAndWait(signed.tx_blob);
+        txHash = response.result.hash;
+        console.log('Mainnet burn transaction submitted and validated:', txHash);
+      } else {
+        // Use regular submit for Testnet
+        response = await client.submit(burnTransaction, { wallet });
+        console.log('NFT burn response:', JSON.stringify(response.result, null, 2));
+        
+        if (response.result.engine_result !== 'tesSUCCESS') {
+          return NextResponse.json(
+            { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.engine_result_message },
+            { status: 400 }
+          );
+        }
+        txHash = response.result.tx_json.hash;
       }
 
-      const txHash = response.result.tx_json.hash;
 
       // Log the burn operation
       if (idempotencyKey) {

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { Client, Wallet as XrplWallet } from 'xrpl';
+import { Wallet as XrplWallet } from 'xrpl';
 import { WalletData, ApiResponse, WalletsApiData } from '@/types/wallet';
 import { saveData, loadData } from '@/lib/vercel-storage';
-import { getWebSocketUrl, hasFaucet } from '@/lib/network-config';
+import { hasFaucet } from '@/lib/network-config';
 
 function validateEnvironment(): { isValid: boolean; error?: string } {
   const network = process.env.XRPL_NETWORK;
@@ -25,74 +25,42 @@ function validateEnvironment(): { isValid: boolean; error?: string } {
 }
 
 async function generateWallets(): Promise<WalletData> {
-  const wsUrl = getWebSocketUrl();
-  const client = new Client(wsUrl);
+  const network = process.env.XRPL_NETWORK as 'TESTNET' | 'MAINNET';
+  const autoFaucet = process.env.XRPL_AUTO_FAUCET === 'true' && hasFaucet();
   
-  try {
-    await client.connect();
-    
-    const roles: Array<'issuer' | 'hot' | 'seller' | 'buyer'> = ['issuer', 'hot', 'seller', 'buyer'];
-    const network = process.env.XRPL_NETWORK as 'TESTNET' | 'MAINNET';
-    const autoFaucet = process.env.XRPL_AUTO_FAUCET === 'true' && hasFaucet();
-    
-    const wallets = await Promise.all(
-      roles.map(async (role) => {
-        // Auto-faucet for TESTNET - create funded wallet directly
-        if (network === 'TESTNET' && autoFaucet) {
-          try {
-            console.log(`Auto-funding ${role} wallet...`);
-            const fundingResult = await client.fundWallet();
-            console.log(`Auto-funded ${role} wallet:`, {
-              address: fundingResult.wallet.address,
-              balance: fundingResult.balance
-            });
-            
-            // Use the funded wallet
-            return {
-              role,
-              address: fundingResult.wallet.address,
-              publicKey: fundingResult.wallet.publicKey,
-              privateKey: fundingResult.wallet.privateKey,
-              seed: fundingResult.wallet.seed!
-            };
-          } catch (fundError) {
-            console.warn(`Failed to auto-fund ${role} wallet:`, fundError);
-            // Fallback to regular wallet generation
-            const wallet = XrplWallet.generate();
-            return {
-              role,
-              address: wallet.address,
-              publicKey: wallet.publicKey,
-              privateKey: wallet.privateKey,
-              seed: wallet.seed!
-            };
-          }
-        } else {
-          // Regular wallet generation (MAINNET or faucet disabled)
-          const wallet = XrplWallet.generate();
-          return {
-            role,
-            address: wallet.address,
-            publicKey: wallet.publicKey,
-            privateKey: wallet.privateKey,
-            seed: wallet.seed!
-          };
-        }
-      })
-    );
-
-    const walletData: WalletData = {
-      version: 1,
-      createdAt: new Date().toISOString(),
-      network,
-      sourceTag: parseInt(process.env.XRPL_SOURCE_TAG!, 10),
-      wallets
+  console.log(`Generating wallets for ${network} (auto-faucet: ${autoFaucet})`);
+  
+  const roles: Array<'issuer' | 'hot' | 'seller' | 'buyer'> = ['issuer', 'hot', 'seller', 'buyer'];
+  
+  // Generate wallets without connecting to XRPL
+  // This is faster and works for both testnet and mainnet
+  const wallets = roles.map((role) => {
+    console.log(`Generating ${role} wallet...`);
+    const wallet = XrplWallet.generate();
+    return {
+      role,
+      address: wallet.address,
+      publicKey: wallet.publicKey,
+      privateKey: wallet.privateKey,
+      seed: wallet.seed!
     };
+  });
 
-    return walletData;
-  } finally {
-    await client.disconnect();
-  }
+  const walletData: WalletData = {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    network,
+    sourceTag: parseInt(process.env.XRPL_SOURCE_TAG!, 10),
+    wallets
+  };
+
+  console.log('Wallets generated successfully:', {
+    network,
+    count: wallets.length,
+    addresses: wallets.map(w => w.address)
+  });
+
+  return walletData;
 }
 
 // Função removida - não é mais necessária com Vercel Blob
@@ -111,18 +79,25 @@ export async function POST(): Promise<NextResponse<ApiResponse<WalletsApiData>>>
     // Check if wallets already exist
     const existingWallets = await loadData<WalletData>('wallets.json');
     if (existingWallets) {
-      // Return existing wallets without secrets
-      const response: WalletsApiData = {
-        network: existingWallets.network,
-        sourceTag: existingWallets.sourceTag,
-        wallets: existingWallets.wallets.map(w => ({ role: w.role, address: w.address }))
-      };
+      // Check if the existing wallets are for the same network
+      const currentNetwork = process.env.XRPL_NETWORK;
+      if (existingWallets.network === currentNetwork) {
+        // Return existing wallets without secrets
+        const response: WalletsApiData = {
+          network: existingWallets.network,
+          sourceTag: existingWallets.sourceTag,
+          wallets: existingWallets.wallets.map(w => ({ role: w.role, address: w.address }))
+        };
 
-      return NextResponse.json({
-        ok: true,
-        created: false,
-        data: response
-      });
+        return NextResponse.json({
+          ok: true,
+          created: false,
+          data: response
+        });
+      } else {
+        // Different network, need to regenerate wallets
+        console.log(`Network changed from ${existingWallets.network} to ${currentNetwork}, regenerating wallets...`);
+      }
     }
 
     // Generate new wallets
@@ -146,6 +121,11 @@ export async function POST(): Promise<NextResponse<ApiResponse<WalletsApiData>>>
 
   } catch (error) {
     console.error('Error initializing wallets:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    });
     return NextResponse.json(
       { ok: false, error: 'Failed to initialize wallets' },
       { status: 500 }

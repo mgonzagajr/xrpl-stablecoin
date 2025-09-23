@@ -1,6 +1,6 @@
 import { put, del, list } from '@vercel/blob';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
 
 // Helper para detectar se estamos em produção (Vercel) ou desenvolvimento local
 const isProduction = process.env.NODE_ENV === 'production';
@@ -19,6 +19,13 @@ export async function saveData(filename: string, data: unknown): Promise<void> {
   } else {
     // Em desenvolvimento: usar sistema de arquivos local
     const filePath = join(process.cwd(), 'data', filename);
+    const dataDir = dirname(filePath);
+    
+    // Criar diretório se não existir
+    if (!existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true });
+    }
+    
     writeFileSync(filePath, jsonData);
   }
 }

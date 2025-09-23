@@ -19,6 +19,14 @@ Um sistema de gerenciamento de carteiras XRPL para Proof of Concept (POC) desenv
 - **APIs Idempotentes**: Endpoints seguros para inicializar carteiras e configurar XRPL
 - **Interface Desktop-First**: Páginas responsivas e intuitivas
 - **Notificações Toast**: Sistema de notificações não intrusivas
+- **Suporte Multi-Rede**: Configuração automática para TESTNET e MAINNET
+- **Cache Inteligente**: Sistema de cache com limpeza manual e indicadores visuais
+- **Links para Explorer**: Links diretos para XRPL Explorer (testnet/livenet)
+- **Links para Bithomp**: Links diretos para Bithomp Explorer para NFTs
+- **Configuração Dinâmica**: Código de moeda e configurações carregadas do ambiente
+- **Validação de Rede**: Detecção automática de rede e configuração de WebSocket
+- **Exibição Otimizada de NFTs**: Imagens NFT mostradas completamente sem cortes
+- **Transações Mainnet Confiáveis**: Uso de `submitAndWait` para maior confiabilidade
 
 ## 🛠️ Tecnologias
 
@@ -135,6 +143,18 @@ O sistema agora detecta automaticamente a URL da rede baseada na variável `XRPL
 - **MAINNET**: `wss://xrplcluster.com`
 
 Você não precisa mais configurar `XRPL_WS_URL` manualmente! 🎉
+
+#### Configuração Dinâmica
+
+O sistema agora carrega configurações dinamicamente do ambiente:
+
+- **Código da Moeda**: `XRPL_CURRENCY_CODE` (ex: SBR, USD, EUR)
+- **Limite de Trust Line**: `XRPL_TRUST_LIMIT`
+- **Flags do Emissor**: `XRPL_REQUIRE_AUTH`, `XRPL_NO_FREEZE`
+- **Valores Padrão**: `XRPL_DEFAULT_ISSUE`, `XRPL_DEFAULT_DISTRIBUTE`
+- **Source Tag**: `XRPL_SOURCE_TAG`
+
+Todas as configurações são exibidas dinamicamente na interface!
 
 ### Instalação
 
@@ -504,10 +524,11 @@ Gera uma chave de idempotência sequencial.
 1. Acesse a página inicial em `/`
 2. Clique em "🚀 Setup XRPL Wallets"
 3. Na página `/setup`, clique em "Initialize wallets"
-4. Visualize as carteiras geradas na tabela
+4. Visualize as carteiras geradas na tabela com links para o XRPL Explorer
 5. Use os botões "Copy" para copiar endereços
 6. Configure as flags do emissor clicando em "Set issuer flags"
 7. Crie trust lines clicando em "Create trust lines"
+8. Use "Clear Cache" para limpar dados em cache e recarregar configurações frescas
 
 ### Operações de Stablecoin (SBR)
 8. Na seção "Stablecoin (SBR)":
@@ -582,6 +603,15 @@ Gera uma chave de idempotência sequencial.
 - **Notificações Toast**: Sistema de notificações não intrusivas
 - **Responsividade**: Interface otimizada para desktop com suporte mobile
 - **Atualização Automática**: Listas de ofertas e NFTs se atualizam automaticamente
+- **Configuração Dinâmica**: Código de moeda e configurações carregadas do ambiente
+- **Indicadores de Cache**: Distinção visual entre dados frescos e em cache
+- **Links para Explorer**: Links diretos para XRPL Explorer baseados na rede
+- **Links para Bithomp**: Links diretos para Bithomp Explorer para NFTs
+- **Limpeza de Cache**: Sistema de limpeza manual de todos os caches
+- **Configuração de Rede Automática**: Detecção automática de WebSocket baseada na rede
+- **Validação de Ambiente**: Verificação rigorosa de variáveis de ambiente obrigatórias
+- **Transações Mainnet Otimizadas**: Uso de `submitAndWait` para maior confiabilidade
+- **Exibição de Imagens NFT**: Imagens mostradas completamente sem cortes
 
 ## 📁 Arquivos de Dados
 
@@ -596,6 +626,16 @@ O sistema cria os seguintes arquivos na pasta `data/`:
 
 - **`ipfs_metadata_cache`**: Cache de metadados IPFS com TTL de 24 horas
 - **`xrpl_wallets_cached_v1`**: Cache de carteiras para performance
+- **`xrpl_issuer_flags_cached`**: Cache de configuração de flags do emissor
+- **`xrpl_trust_lines_cached`**: Cache de configuração de trust lines
+
+### Sistema de Cache Inteligente
+
+O sistema agora inclui indicadores visuais para distinguir entre dados frescos e em cache:
+
+- **🟢 "Configured"**: Dados configurados na sessão atual
+- **🟡 "Cached"**: Dados carregados do cache local
+- **Botão "Clear Cache"**: Limpa todos os caches e recarrega dados frescos
 
 ## 📝 Notas de Desenvolvimento
 
@@ -650,12 +690,58 @@ Este projeto está configurado para funcionar tanto em desenvolvimento local qua
 
 Para um projeto pequeno, os custos são praticamente zero!
 
+## 🔧 Troubleshooting
+
+### Problemas Comuns
+
+#### 1. **Saldos não carregam em Mainnet local**
+- **Problema**: Saldos ficam em "Loading..." indefinidamente
+- **Solução**: O sistema tenta conectar ao Mainnet real com timeout de 10s. Se falhar, usa dados mock para desenvolvimento local
+
+#### 2. **Flags do emissor não aparecem no scan**
+- **Problema**: Apenas `defaultRipple` aparece no XRPL Explorer
+- **Causa**: Flags `requireAuth` e `noFreeze` só são visíveis quando há tokens emitidos
+- **Solução**: Emita tokens primeiro, depois configure as flags
+
+#### 3. **Cache não limpa completamente**
+- **Problema**: Dados antigos persistem após "Clear Cache"
+- **Solução**: Use o botão "Clear Cache" na página `/setup` - ele limpa todos os caches (wallets, flags, trust lines)
+
+#### 4. **Configurações não carregam**
+- **Problema**: Valores padrão não aparecem na interface
+- **Causa**: Variáveis de ambiente não definidas no `.env.local`
+- **Solução**: Verifique se todas as variáveis estão definidas no arquivo `.env.local`
+
+#### 5. **Erro 500 ao inicializar wallets**
+- **Problema**: "Failed to initialize wallets" em Mainnet
+- **Causa**: Tentativa de conectar ao XRPL durante geração de wallets
+- **Solução**: Wallets são geradas localmente, sem conexão XRPL
+
+#### 6. **NFT mint falha em Mainnet**
+- **Problema**: NFT é mintado mas retorna erro "Transaction not found"
+- **Causa**: Transação demora para ser validada em Mainnet
+- **Solução**: Sistema usa `submitAndWait` para Mainnet, garantindo validação
+
+#### 7. **Imagens NFT cortadas na galeria**
+- **Problema**: Imagens NFT aparecem cortadas em formato quadrado
+- **Causa**: Uso de `object-cover` cortava partes da imagem
+- **Solução**: Sistema usa `object-contain` para mostrar imagem completa
+
+### Logs de Debug
+
+Para debug, verifique os logs do servidor:
+```bash
+npm run dev
+# Verifique o terminal para mensagens de erro
+```
+
 ## 🚧 Limitações POC
 
 - Sem autenticação ou autorização
 - Sem criptografia adicional dos dados
 - Sem backup automático
 - Armazenamento local em desenvolvimento (produção usa Vercel Blob)
+- Flags `requireAuth` e `noFreeze` só são visíveis no scan quando há tokens emitidos
 
 ## 📄 Licença
 

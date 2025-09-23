@@ -84,12 +84,12 @@ export async function POST() {
     // Get WebSocket URL from network config
     const wsUrl = getWebSocketUrl();
     const sourceTag = Number(process.env.XRPL_SOURCE_TAG) || 0;
-    const currencyCode = process.env.XRPL_CURRENCY_CODE || 'SBR';
+    const currencyCode = process.env.XRPL_CURRENCY_CODE;
     const trustLimit = process.env.XRPL_TRUST_LIMIT || '1000000000';
     const minXrp = Number(process.env.XRPL_MIN_XRP) || 10;
 
     // Validate currency code
-    if (!/^[A-Z]{3}$|^[A-F0-9]{40}$/.test(currencyCode)) {
+    if (!currencyCode || !/^[A-Z]{3}$|^[A-F0-9]{40}$/.test(currencyCode)) {
       return NextResponse.json(
         { ok: false, error: 'INVALID_CURRENCY_CODE' },
         { status: 500 }

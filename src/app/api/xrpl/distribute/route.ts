@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
           data: {
             txHash: existingTxHash,
             amount: distributeAmount,
-            currency: process.env.XRPL_CURRENCY_CODE || 'SBR',
+            currency: process.env.XRPL_CURRENCY_CODE,
             from: 'hot',
             to: 'buyer'
           }
@@ -134,9 +134,17 @@ export async function POST(request: NextRequest) {
     // Environment variables
     const wsUrl = getWebSocketUrl();
     const sourceTag = Number(process.env.XRPL_SOURCE_TAG) || 0;
-    const currencyCode = process.env.XRPL_CURRENCY_CODE || 'SBR';
+    const currencyCode = process.env.XRPL_CURRENCY_CODE;
     const minXrp = Number(process.env.XRPL_MIN_XRP) || 10;
     const requireAuth = process.env.XRPL_REQUIRE_AUTH === 'true';
+
+    // Validate currency code
+    if (!currencyCode) {
+      return NextResponse.json(
+        { ok: false, error: 'MISSING_CURRENCY_CODE' },
+        { status: 400 }
+      );
+    }
 
     // Connect to XRPL
     const client = new Client(wsUrl);

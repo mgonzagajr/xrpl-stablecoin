@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useWallets } from '@/hooks/useWallets';
 import { useNFT } from '@/hooks/useNFT';
 import { useToast } from '@/hooks/useToast';
+import { useConfig } from '@/hooks/useConfig';
 import ToastContainer from '@/components/ToastContainer';
 import Header from '@/components/Header';
 import Button from '@/components/Button';
@@ -27,6 +28,7 @@ interface NFTMetadata {
 export default function NFTGalleryPage() {
   const { wallets, loading: walletsLoading } = useWallets();
   const { toasts, removeToast } = useToast();
+  const { config } = useConfig();
   const {
     sellerNFTs,
     buyerNFTs,
@@ -40,6 +42,13 @@ export default function NFTGalleryPage() {
   const [loadingMetadata, setLoadingMetadata] = useState<Record<string, boolean>>({});
   const [failedMetadata, setFailedMetadata] = useState<Set<string>>(new Set());
   const [queueStatus, setQueueStatus] = useState({ queueLength: 0, running: 0 });
+
+  // Generate Bithomp Explorer link for NFT
+  const getBithompLink = (nftokenId: string) => {
+    const isTestnet = config?.network === 'TESTNET';
+    const baseUrl = isTestnet ? 'https://test.bithomp.com' : 'https://bithomp.com';
+    return `${baseUrl}/en/nft/${nftokenId}`;
+  };
 
   const fetchMetadata = useCallback(async (uri: string, nftokenId: string): Promise<NFTMetadata | null> => {
     // Check if we already have the metadata or if it failed before
@@ -240,19 +249,32 @@ export default function NFTGalleryPage() {
                   {nft.nftokenId}
                 </code>
               </div>
-              <CopyButton text={nft.nftokenId} />
+              <div className="flex items-center space-x-1">
+                <CopyButton text={nft.nftokenId} />
+                <a
+                  href={getBithompLink(nft.nftokenId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                  title="View on Bithomp Explorer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Image */}
         {metadata?.image && (
-          <div className="mb-4 relative w-full h-48">
+          <div className="mb-4 relative w-full h-64 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
             <Image
               src={metadata.image}
               alt={metadata.name || 'NFT Image'}
               fill
-              className="object-cover rounded-lg border border-gray-200"
+              className="object-contain rounded-lg"
               onError={() => {
                 // Handle error by hiding the image
                 console.error('Failed to load image:', metadata.image);

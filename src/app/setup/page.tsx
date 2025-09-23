@@ -14,7 +14,7 @@ import Input from '@/components/Input';
 import { generateIdempotencyKey } from '@/lib/idempotency-helper';
 
 export default function SetupPage() {
-  const { wallets, balances, loading, error, initializeWallets, refreshWallets, refreshBalances } = useWallets();
+  const { wallets, balances, loading, error, initializeWallets, refreshWallets, refreshBalances, clearCache } = useWallets();
   const { config } = useConfig();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const {
@@ -38,7 +38,8 @@ export default function SetupPage() {
     trustLinesLoading,
     trustLinesData,
     trustLinesError,
-    createTrustLines
+    createTrustLines,
+    clearCache: clearXrplCache
   } = useXrplOperations();
 
   const handleInitialize = async () => {
@@ -47,6 +48,12 @@ export default function SetupPage() {
 
   const handleRefresh = async () => {
     await refreshWallets();
+  };
+
+  const handleClearCache = () => {
+    clearCache(); // Clear wallets cache
+    clearXrplCache(); // Clear XRPL operations cache
+    showSuccess('Cache limpo com sucesso!');
   };
 
   const handleSetIssuerFlags = async () => {
@@ -65,10 +72,10 @@ export default function SetupPage() {
     
     const result = await issue({ amount: issueAmount, idempotencyKey });
     if (result.success) {
-      showSuccess(`Issued ${issueAmount} SBR to hot wallet!`, `TxHash: ${result.data?.txHash}`);
+      showSuccess(`Issued ${issueAmount} ${config?.currencyCode || 'SBR'} to hot wallet!`, `TxHash: ${result.data?.txHash}`);
       fetchBalances();
     } else {
-      showError(`Failed to issue SBR: ${result.error}`);
+      showError(`Failed to issue ${config?.currencyCode || 'SBR'}: ${result.error}`);
     }
   };
 
@@ -78,10 +85,10 @@ export default function SetupPage() {
     
     const result = await distribute({ amount: distributeAmount, idempotencyKey });
     if (result.success) {
-      showSuccess(`Distributed ${distributeAmount} SBR to buyer!`, `TxHash: ${result.data?.txHash}`);
+      showSuccess(`Distributed ${distributeAmount} ${config?.currencyCode || 'SBR'} to buyer!`, `TxHash: ${result.data?.txHash}`);
       fetchBalances();
     } else {
-      showError(`Failed to distribute SBR: ${result.error}`);
+      showError(`Failed to distribute ${config?.currencyCode || 'SBR'}: ${result.error}`);
     }
   };
 
@@ -126,6 +133,13 @@ export default function SetupPage() {
                 type="primary"
               >
                 {loading ? 'Initializing...' : 'Initialize Wallets'}
+              </Button>
+              
+              <Button
+                onClick={handleClearCache}
+                type="secondary"
+              >
+                Clear Cache
               </Button>
               
               {wallets && (
@@ -199,12 +213,16 @@ export default function SetupPage() {
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Role</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Address</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">XRP Balance</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Explorer</th>
                   </tr>
                 </thead>
                 <tbody>
                   {wallets.wallets.map((wallet) => {
                     const balance = balances?.balances?.find(b => b.address === wallet.address);
                     const needsFunding = balance && balance.balanceXrp < minXrp;
+                    const explorerUrl = wallets.network === 'MAINNET' 
+                      ? `https://livenet.xrpl.org/accounts/${wallet.address}`
+                      : `https://testnet.xrpl.org/accounts/${wallet.address}`;
                     
                     return (
                       <tr key={wallet.role} className="border-b border-gray-100 hover:bg-gray-50">
@@ -233,6 +251,30 @@ export default function SetupPage() {
                             <span className="text-gray-400">Loading...</span>
                           )}
                         </td>
+                        <td className="py-3 px-4">
+                          <a
+                            href={explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 transition-colors"
+                            title={`View ${wallet.role} wallet on XRPL Explorer`}
+                          >
+                            <svg 
+                              className="w-4 h-4" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                strokeWidth={2} 
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
+                              />
+                            </svg>
+                            <span className="text-xs">View</span>
+                          </a>
+                        </td>
                       </tr>
                     );
                   })}
@@ -253,8 +295,11 @@ export default function SetupPage() {
               <div className="border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Issuer Flags</h3>
-                  {issuerFlagsData && (
+                  {issuerFlagsData && !issuerFlagsData._cached && (
                     <span className="badge badge-success">Configured</span>
+                  )}
+                  {issuerFlagsData && issuerFlagsData._cached && (
+                    <span className="badge badge-warning">Cached</span>
                   )}
                 </div>
                 <p className="text-sm text-gray-600 mb-4">
@@ -293,12 +338,15 @@ export default function SetupPage() {
               <div className="border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Trust Lines</h3>
-                  {trustLinesData && (
+                  {trustLinesData && !trustLinesData._cached && (
                     <span className="badge badge-success">Created</span>
+                  )}
+                  {trustLinesData && trustLinesData._cached && (
+                    <span className="badge badge-warning">Cached</span>
                   )}
                 </div>
                 <p className="text-sm text-gray-600 mb-4">
-                  Create trust lines for SBR token operations
+                  Create trust lines for {config?.currencyCode || 'SBR'} token operations
                 </p>
                 
                 {trustLinesData && (
@@ -335,14 +383,14 @@ export default function SetupPage() {
         {/* Stablecoin Operations Section */}
         {wallets && (
           <div className="card mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Stablecoin Operations (SBR)</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Stablecoin Operations ({config?.currencyCode || 'SBR'})</h2>
             
             <div className="grid md:grid-cols-2 gap-6">
               {/* Issue SBR */}
               <div className="border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Issue SBR to Hot</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Issue {config?.currencyCode || 'SBR'} to Hot</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Issue SBR tokens from issuer to hot wallet
+                  Issue {config?.currencyCode || 'SBR'} tokens from issuer to hot wallet
                 </p>
                 
                 <div className="space-y-4">
@@ -350,7 +398,6 @@ export default function SetupPage() {
                     id="issueAmount"
                     label="Amount"
                     type="text"
-                    defaultValue={config?.defaultIssue || '1000000'}
                     placeholder="Enter amount"
                   />
                   
@@ -381,16 +428,16 @@ export default function SetupPage() {
                     type="success"
                     className="w-full"
                   >
-                    {issueLoading ? 'Issuing...' : 'Issue SBR to Hot'}
+                    {issueLoading ? 'Issuing...' : `Issue ${config?.currencyCode || 'SBR'} to Hot`}
                   </Button>
                 </div>
               </div>
 
               {/* Distribute SBR */}
               <div className="border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Distribute SBR to Buyer</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Distribute {config?.currencyCode || 'SBR'} to Buyer</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Transfer SBR tokens from hot to buyer wallet
+                  Transfer {config?.currencyCode || 'SBR'} tokens from hot to buyer wallet
                 </p>
                 
                 <div className="space-y-4">
@@ -398,7 +445,6 @@ export default function SetupPage() {
                     id="distributeAmount"
                     label="Amount"
                     type="text"
-                    defaultValue={config?.defaultDistribute || '100'}
                     placeholder="Enter amount"
                   />
                   
@@ -429,7 +475,7 @@ export default function SetupPage() {
                     type="success"
                     className="w-full"
                   >
-                    {distributeLoading ? 'Distributing...' : 'Distribute SBR to Buyer'}
+                    {distributeLoading ? 'Distributing...' : `Distribute ${config?.currencyCode || 'SBR'} to Buyer`}
                   </Button>
                 </div>
               </div>
@@ -465,7 +511,7 @@ export default function SetupPage() {
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Role</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Address</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">XRP</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">SBR</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">{config?.currencyCode || 'SBR'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -484,7 +530,7 @@ export default function SetupPage() {
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-mono text-sm">
-                            {entry.sbr || '0'} SBR
+                            {entry.sbr || '0'} {config?.currencyCode || 'SBR'}
                           </span>
                         </td>
                       </tr>

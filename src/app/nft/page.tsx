@@ -12,7 +12,27 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Input from '@/components/Input';
 import { generateIdempotencyKey } from '@/lib/idempotency-helper';
-import { useState, useEffect } from 'react';
+import { formatSbrBalance } from '@/lib/formatters';
+import { getCachedMetadata, setCachedMetadata } from '@/lib/ipfs-cache';
+import { useState, useEffect, useCallback } from 'react';
+
+interface NFTMetadata {
+  name?: string;
+  description?: string;
+  image?: string;
+  external_url?: string;
+  attributes?: Array<{
+    trait_type: string;
+    value: string | number;
+  }>;
+}
+
+interface NFTGroup {
+  taxon: number;
+  nfts: Array<{ nftokenId: string; uri?: string; taxon?: number }>;
+  totalCount: number;
+  metadata?: NFTMetadata;
+}
 
 export default function NFTPage() {
   const { wallets, loading: walletsLoading } = useWallets();
@@ -49,12 +69,20 @@ export default function NFTPage() {
     burnLoading,
     burnError,
     burn,
+    batchMintLoading,
+    batchMintError,
+    mintBatch,
   } = useNFT();
 
   const [mintUri, setMintUri] = useState('');
   const [mintTransferable, setMintTransferable] = useState(true);
   const [mintTaxon, setMintTaxon] = useState(0);
   const [mintIdempotency, setMintIdempotency] = useState('');
+  const [mintQty, setMintQty] = useState(1);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const [batchLogs, setBatchLogs] = useState<Array<{type: string, message: string, timestamp: string}>>([]);
+  const [logContainerRef, setLogContainerRef] = useState<HTMLDivElement | null>(null);
+  const [processedCount, setProcessedCount] = useState(0);
   const [offerNftokenId, setOfferNftokenId] = useState('');
   const [offerAmount, setOfferAmount] = useState('');
   const [offerIdempotency, setOfferIdempotency] = useState('');
@@ -64,7 +92,104 @@ export default function NFTPage() {
   const [burnNftokenId, setBurnNftokenId] = useState('');
   const [burnRole, setBurnRole] = useState<'seller' | 'buyer'>('seller');
   const [burnIdempotency, setBurnIdempotency] = useState('');
+  const [groupedView, setGroupedView] = useState(true);
   const [burningNftokenId, setBurningNftokenId] = useState<string | null>(null);
+  const [metadataCache, setMetadataCache] = useState<Record<string, NFTMetadata | null>>({});
+
+  // Group NFTs by taxon
+  const groupNFTsByTaxon = useCallback((nfts: Array<{ nftokenId: string; uri?: string; taxon?: number }>): NFTGroup[] => {
+    const groups: Record<number, NFTGroup> = {};
+    
+    nfts.forEach(nft => {
+      const taxon = nft.taxon || 0;
+      if (!groups[taxon]) {
+        groups[taxon] = {
+          taxon,
+          nfts: [],
+          totalCount: 0
+        };
+      }
+      groups[taxon].nfts.push(nft);
+      groups[taxon].totalCount++;
+      
+      // Use metadata from first NFT in group
+      if (!groups[taxon].metadata && nft.uri) {
+        const metadata = metadataCache[nft.nftokenId];
+        if (metadata) {
+          groups[taxon].metadata = metadata;
+        }
+      }
+    });
+    
+    return Object.values(groups).sort((a, b) => a.taxon - b.taxon);
+  }, [metadataCache]);
+
+  // Render NFT group (compact version for /nft page)
+  const renderNFTGroup = (group: NFTGroup) => {
+    const firstNFT = group.nfts[0];
+    const metadata = group.metadata;
+    
+    return (
+      <tr key={`taxon-${group.taxon}`} className="border-b border-gray-100">
+        <td className="py-3 px-3">
+          <div className="flex items-center space-x-3">
+            {/* NFT Image */}
+            <div className="w-8 h-8 bg-gray-200 rounded overflow-hidden flex items-center justify-center">
+              {metadata?.image ? (
+                <img
+                  src={metadata.image}
+                  alt={metadata.name || `NFT ${group.taxon}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className="hidden w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                NFT
+              </div>
+            </div>
+            
+            {/* NFT Name */}
+            <span className="text-sm font-medium text-gray-900">
+              {metadata?.name || `NFT ${group.taxon}`}
+            </span>
+          </div>
+        </td>
+        <td className="py-3 px-3">
+          <div className="flex items-center space-x-3">
+            {/* Taxon ID */}
+            <span className="text-sm font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              Taxon {group.taxon}
+            </span>
+            
+            {/* Quantity */}
+            <span className="text-sm font-medium text-gray-900">
+              {group.totalCount} NFT{group.totalCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </td>
+        <td className="py-3 px-3">
+          <div className="flex items-center space-x-1">
+            {/* Explorer Link */}
+            <a
+              href={getBithompLink(firstNFT.nftokenId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+              title="View on Bithomp Explorer"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        </td>
+      </tr>
+    );
+  };
 
   // Set page title
   useEffect(() => {
@@ -81,27 +206,148 @@ export default function NFTPage() {
     }
   }, [wallets, refreshSellerNFTs, refreshBuyerNFTs, refreshOffers, fetchBalances]);
 
+  // Load metadata for NFTs when they change
+  useEffect(() => {
+    const loadMetadata = async () => {
+      const allNFTs = [...sellerNFTs, ...buyerNFTs];
+      for (const nft of allNFTs) {
+        if (nft.uri && !metadataCache[nft.nftokenId]) {
+          try {
+            // Check cache first
+            const cachedData = getCachedMetadata(nft.nftokenId);
+            if (cachedData) {
+              setMetadataCache(prev => ({ ...prev, [nft.nftokenId]: cachedData }));
+              continue;
+            }
+
+            // Fetch metadata
+            const response = await fetch(nft.uri);
+            if (response.ok) {
+              const metadata = await response.json();
+              setCachedMetadata(nft.nftokenId, nft.uri, metadata);
+              setMetadataCache(prev => ({ ...prev, [nft.nftokenId]: metadata }));
+            } else {
+              setMetadataCache(prev => ({ ...prev, [nft.nftokenId]: null }));
+            }
+          } catch (error) {
+            console.log(`Failed to fetch metadata for ${nft.nftokenId}:`, error);
+            setMetadataCache(prev => ({ ...prev, [nft.nftokenId]: null }));
+          }
+        }
+      }
+    };
+
+    if (sellerNFTs.length > 0 || buyerNFTs.length > 0) {
+      loadMetadata();
+    }
+  }, [sellerNFTs, buyerNFTs, metadataCache]);
+
+  // Auto-scroll log container to bottom when new logs are added
+  useEffect(() => {
+    if (logContainerRef && batchLogs.length > 0) {
+      logContainerRef.scrollTop = logContainerRef.scrollHeight;
+    }
+  }, [batchLogs, logContainerRef]);
+
   const handleMint = async () => {
     if (!mintUri.trim()) {
       showError('Please enter a metadata URI');
       return;
     }
 
-    const result = await mint({
-      uri: mintUri.trim(),
-      transferable: mintTransferable,
-      taxon: mintTaxon,
-      idempotencyKey: mintIdempotency.trim() || undefined,
-    });
+    if (mintQty > 1) {
+      // Use batch mint for multiple NFTs with real-time progress
+      const batchId = mintIdempotency.trim() || `batch-${Date.now()}`;
+      
+      // Reset progress state
+      setBatchProgress(0);
+      setBatchLogs([]);
+      setProcessedCount(0);
+      
+      // Store the total count locally to avoid issues with state updates
+      const totalToMint = mintQty;
+      
+      const result = await mintBatch({
+        uri: mintUri.trim(),
+        count: mintQty,
+        transferable: mintTransferable,
+        taxon: mintTaxon,
+        batchId,
+      }, (update) => {
+        // Handle real-time progress updates
+        const timestamp = new Date().toLocaleTimeString();
+        
+        if (update.type === 'progress') {
+          setBatchLogs(prev => [...prev, {
+            type: 'progress',
+            message: update.message || `Processing NFT ${update.nftIndex}/${update.total}...`,
+            timestamp
+          }]);
+          
+          // Don't update progress percentage here, only on success
+        } else if (update.type === 'success') {
+          setBatchLogs(prev => [...prev, {
+            type: 'success',
+            message: update.message || `NFT ${update.nftIndex}/${update.total} minted successfully!`,
+            timestamp
+          }]);
+          
+          // Update progress based on successfully processed NFTs
+          setProcessedCount(prev => {
+            const newCount = prev + 1;
+            setBatchProgress(Math.round((newCount / totalToMint) * 100));
+            return newCount;
+          });
+        } else if (update.type === 'error') {
+          setBatchLogs(prev => [...prev, {
+            type: 'error',
+            message: update.message || `NFT ${update.nftIndex}/${update.total} failed: ${update.error}`,
+            timestamp
+          }]);
+        } else if (update.type === 'complete') {
+          setBatchLogs(prev => [...prev, {
+            type: 'complete',
+            message: update.message || 'Batch mint completed!',
+            timestamp
+          }]);
+          setBatchProgress(100);
+        }
+      });
 
-    if (result.success) {
-      showSuccess(`NFT minted successfully!`, `NFTokenID: ${result.data?.nftokenId}`);
-      setMintUri('');
-      setMintTaxon(0);
-      setMintIdempotency('');
-      refreshSellerNFTs();
+      if (result.success) {
+        const data = result.data!;
+        if (data.success) {
+          showSuccess(`Batch mint completed!`, `${data.totalProcessed}/${data.totalRequested} NFTs minted successfully`);
+        } else {
+          showError(`Batch mint failed: ${data.totalProcessed}/${data.totalRequested} NFTs processed`);
+        }
+        setMintUri('');
+        setMintTaxon(0);
+        setMintIdempotency('');
+        setMintQty(1);
+        refreshSellerNFTs();
+      } else {
+        showError(`Failed to mint batch: ${result.error}`);
+      }
     } else {
-      showError(`Failed to mint NFT: ${result.error}`);
+      // Use single mint for one NFT
+      const result = await mint({
+        uri: mintUri.trim(),
+        transferable: mintTransferable,
+        taxon: mintTaxon,
+        idempotencyKey: mintIdempotency.trim() || undefined,
+      });
+
+      if (result.success) {
+        showSuccess(`NFT minted successfully!`, `NFTokenID: ${result.data?.nftokenId}`);
+        setMintUri('');
+        setMintTaxon(0);
+        setMintIdempotency('');
+        setMintQty(1);
+        refreshSellerNFTs();
+      } else {
+        showError(`Failed to mint NFT: ${result.error}`);
+      }
     }
   };
 
@@ -149,6 +395,7 @@ export default function NFTPage() {
       setAcceptOfferIndex('');
       setAcceptIdempotency('');
       refreshBuyerNFTs();
+      refreshSellerNFTs(); // Also refresh seller NFTs to see the NFT being removed
       
       // Wait a moment for the transaction to be processed on XRPL
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -356,9 +603,13 @@ export default function NFTPage() {
                     <span className="text-gray-600">XRP:</span>
                     <span className="font-mono text-gray-900">{balancesData.entries.find(b => b.role === 'seller')?.xrp || '0.00'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">SBR:</span>
-                    <span className="font-mono text-gray-900">{balancesData.entries.find(b => b.role === 'seller')?.sbr || '0'}</span>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">SBR:</span>
+                      <span className="font-mono text-gray-900">{formatSbrBalance(balancesData.entries.find(b => b.role === 'seller')?.sbr || '0')}</span>
+                    </div>
+                  <div className="text-xs text-gray-500 space-y-0.5 pt-2 border-t border-gray-200">
+                    <div>Available: {balancesData.entries.find(b => b.role === 'seller')?.availableXrp?.toFixed(6) || '0.000000'} XRP</div>
+                    <div>Reserve: {balancesData.entries.find(b => b.role === 'seller')?.reserveTotal?.toFixed(1) || '0.0'} XRP (Base: {balancesData.entries.find(b => b.role === 'seller')?.reserveBase || 0} + Owner: {balancesData.entries.find(b => b.role === 'seller')?.reserveOwner?.toFixed(1) || '0.0'})</div>
                   </div>
                 </div>
               </div>
@@ -369,9 +620,13 @@ export default function NFTPage() {
                     <span className="text-gray-600">XRP:</span>
                     <span className="font-mono text-gray-900">{balancesData.entries.find(b => b.role === 'buyer')?.xrp || '0.00'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">SBR:</span>
-                    <span className="font-mono text-gray-900">{balancesData.entries.find(b => b.role === 'buyer')?.sbr || '0'}</span>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">SBR:</span>
+                      <span className="font-mono text-gray-900">{formatSbrBalance(balancesData.entries.find(b => b.role === 'buyer')?.sbr || '0')}</span>
+                    </div>
+                  <div className="text-xs text-gray-500 space-y-0.5 pt-2 border-t border-gray-200">
+                    <div>Available: {balancesData.entries.find(b => b.role === 'buyer')?.availableXrp?.toFixed(6) || '0.000000'} XRP</div>
+                    <div>Reserve: {balancesData.entries.find(b => b.role === 'buyer')?.reserveTotal?.toFixed(1) || '0.0'} XRP (Base: {balancesData.entries.find(b => b.role === 'buyer')?.reserveBase || 0} + Owner: {balancesData.entries.find(b => b.role === 'buyer')?.reserveOwner?.toFixed(1) || '0.0'})</div>
                   </div>
                 </div>
               </div>
@@ -429,6 +684,21 @@ export default function NFTPage() {
             </div>
 
             <div>
+              <Input
+                label="Quantity (1-200)"
+                type="number"
+                value={mintQty}
+                onChange={(e) => setMintQty(Number(e.target.value))}
+                min="1"
+                max="200"
+                placeholder="1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Number of identical NFTs to mint (if &gt; 1, will use batch processing)
+              </p>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Idempotency key (optional)
               </label>
@@ -452,25 +722,119 @@ export default function NFTPage() {
 
             <Button
               onClick={handleMint}
-              disabled={mintLoading}
+              disabled={mintLoading || batchMintLoading}
               type="primary"
             >
-              {mintLoading ? 'Minting...' : 'Mint NFT'}
+              {mintLoading || batchMintLoading 
+                ? (mintQty > 1 ? `Minting ${mintQty} NFTs...` : 'Minting...') 
+                : (mintQty > 1 ? `Mint ${mintQty} NFTs` : 'Mint NFT')
+              }
             </Button>
+
+            {/* Batch Mint Progress */}
+            {(batchMintLoading || batchLogs.length > 0) && (
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium text-blue-900">
+                    Batch Progress: {batchProgress}%
+                  </h3>
+                  <span className="text-sm text-blue-700">
+                    {processedCount}/{mintQty} NFTs
+                  </span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2 mb-3">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${batchProgress}%` }}
+                  ></div>
+                </div>
+                
+                {/* Real-time Log Section */}
+                <details className="text-sm" open={batchMintLoading}>
+                  <summary className="cursor-pointer text-blue-700 hover:text-blue-900 font-medium">
+                    📋 Real-time Processing Log ({batchLogs.length} entries)
+                  </summary>
+                  <div 
+                    ref={setLogContainerRef}
+                    className="mt-2 max-h-60 overflow-y-auto bg-white border border-blue-200 rounded p-2"
+                  >
+                    {batchLogs.length === 0 ? (
+                      <div className="text-gray-500 text-sm">Waiting for updates...</div>
+                    ) : (
+                      batchLogs.map((log, index) => (
+                        <div key={index} className="flex items-start space-x-2 py-1 text-xs">
+                          <span className="text-gray-400 font-mono w-20 flex-shrink-0 whitespace-nowrap">
+                            {log.timestamp}
+                          </span>
+                          <span className={`flex-shrink-0 ${
+                            log.type === 'success' ? 'text-green-600' :
+                            log.type === 'error' ? 'text-red-600' :
+                            log.type === 'complete' ? 'text-blue-600' :
+                            'text-gray-600'
+                          }`}>
+                            {log.type === 'success' ? '✅' :
+                             log.type === 'error' ? '❌' :
+                             log.type === 'complete' ? '🎉' :
+                             '⏳'}
+                          </span>
+                          <span className="text-gray-700 break-words">
+                            {log.message}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {/* Batch Mint Error */}
+            {batchMintError && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                Batch mint error: {batchMintError}
+              </div>
+            )}
           </div>
 
           {/* Seller NFTs Table */}
           <div className="mt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Seller NFTs</h3>
-              <Button
-                onClick={refreshSellerNFTs}
-                disabled={listLoading}
-                type="secondary"
-                size="sm"
-              >
-                {listLoading ? 'Loading...' : 'Refresh'}
-              </Button>
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">View:</span>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setGroupedView(true)}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                        groupedView 
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Grouped
+                    </button>
+                    <button
+                      onClick={() => setGroupedView(false)}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                        !groupedView 
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Individual
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  onClick={refreshSellerNFTs}
+                  disabled={listLoading}
+                  type="secondary"
+                  size="sm"
+                >
+                  {listLoading ? 'Loading...' : 'Refresh'}
+                </Button>
+              </div>
             </div>
 
             {sellerNFTs.length > 0 ? (
@@ -478,38 +842,42 @@ export default function NFTPage() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">NFTokenID</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">URI</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Collection</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Details</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sellerNFTs.map((nft) => (
-                      <tr key={nft.nftokenId} className="border-b border-gray-100">
-                        <td className="py-2 px-3 font-mono text-sm text-gray-900">
-                          {nft.nftokenId}
-                        </td>
-                        <td className="py-2 px-3 text-sm text-gray-900">
-                          {nft.uri || 'N/A'}
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center space-x-1">
-                            <CopyButton text={nft.nftokenId} />
-                            <a
-                              href={getBithompLink(nft.nftokenId)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                              title="View on Bithomp Explorer"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {groupedView ? (
+                      groupNFTsByTaxon(sellerNFTs).map((group) => renderNFTGroup(group))
+                    ) : (
+                      sellerNFTs.map((nft) => (
+                        <tr key={nft.nftokenId} className="border-b border-gray-100">
+                          <td className="py-2 px-3 font-mono text-sm text-gray-900">
+                            {nft.nftokenId}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-gray-900">
+                            {nft.uri || 'N/A'}
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center space-x-1">
+                              <CopyButton text={nft.nftokenId} />
+                              <a
+                                href={getBithompLink(nft.nftokenId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title="View on Bithomp Explorer"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -715,14 +1083,41 @@ export default function NFTPage() {
           <div className="mt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Buyer NFTs</h3>
-              <Button
-                onClick={refreshBuyerNFTs}
-                disabled={listLoading}
-                type="secondary"
-                size="sm"
-              >
-                {listLoading ? 'Loading...' : 'Refresh'}
-              </Button>
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">View:</span>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setGroupedView(true)}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                        groupedView 
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Grouped
+                    </button>
+                    <button
+                      onClick={() => setGroupedView(false)}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                        !groupedView 
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Individual
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  onClick={refreshBuyerNFTs}
+                  disabled={listLoading}
+                  type="secondary"
+                  size="sm"
+                >
+                  {listLoading ? 'Loading...' : 'Refresh'}
+                </Button>
+              </div>
             </div>
 
             {buyerNFTs.length > 0 ? (
@@ -730,38 +1125,42 @@ export default function NFTPage() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">NFTokenID</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">URI</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Collection</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Details</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {buyerNFTs.map((nft) => (
-                      <tr key={nft.nftokenId} className="border-b border-gray-100">
-                        <td className="py-2 px-3 font-mono text-sm text-gray-900">
-                          {nft.nftokenId}
-                        </td>
-                        <td className="py-2 px-3 text-sm text-gray-900">
-                          {nft.uri || 'N/A'}
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center space-x-1">
-                            <CopyButton text={nft.nftokenId} />
-                            <a
-                              href={getBithompLink(nft.nftokenId)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                              title="View on Bithomp Explorer"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {groupedView ? (
+                      groupNFTsByTaxon(buyerNFTs).map((group) => renderNFTGroup(group))
+                    ) : (
+                      buyerNFTs.map((nft) => (
+                        <tr key={nft.nftokenId} className="border-b border-gray-100">
+                          <td className="py-2 px-3 font-mono text-sm text-gray-900">
+                            {nft.nftokenId}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-gray-900">
+                            {nft.uri || 'N/A'}
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center space-x-1">
+                              <CopyButton text={nft.nftokenId} />
+                              <a
+                                href={getBithompLink(nft.nftokenId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title="View on Bithomp Explorer"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

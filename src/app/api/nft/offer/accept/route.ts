@@ -131,6 +131,15 @@ export async function POST(request: NextRequest) {
         const prepared = await client.autofill(acceptTransaction);
         const signed = buyerWallet.sign(prepared);
         response = await client.submitAndWait(signed.tx_blob);
+        
+        // Check if transaction was successful
+        if (typeof response.result.meta === 'object' && response.result.meta && 'TransactionResult' in response.result.meta && response.result.meta.TransactionResult !== 'tesSUCCESS') {
+          return NextResponse.json(
+            { ok: false, error: 'XRPL_REQUEST_FAILED', details: response.result.meta.TransactionResult },
+            { status: 400 }
+          );
+        }
+        
         txHash = response.result.hash;
         console.log('Mainnet accept transaction submitted and validated:', txHash);
       } else {

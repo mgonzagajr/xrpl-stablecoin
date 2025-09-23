@@ -3,6 +3,7 @@ import { Client } from 'xrpl';
 import { getWebSocketUrl } from '@/lib/network-config';
 import { loadData } from '@/lib/vercel-storage';
 
+
 interface WalletData {
   version: number;
   createdAt: string;
@@ -17,16 +18,103 @@ interface WalletData {
   }>;
 }
 
+interface BalanceData {
+  balances: Array<{
+    role: string;
+    address: string;
+    balanceXrp: number;
+    balanceSbr: string;
+    availableXrp: number;
+    reserveTotal: number;
+    reserveBase: number;
+    reserveOwner: number;
+  }>;
+}
+
 interface WalletBalance {
   role: string;
   address: string;
   balanceXrp: number;
   balanceDrops: string;
   balanceSbr?: string;
+  reserveBase: number;
+  reserveOwner: number;
+  reserveTotal: number;
+  availableXrp: number;
 }
+
+// Function to calculate reserves
+async function calculateReserves(client: Client, address: string) {
+  try {
+    const accountInfo = await client.request({
+      command: 'account_info',
+      account: address,
+      ledger_index: 'validated'
+    });
+
+    const accountData = accountInfo.result.account_data;
+    
+    // Base reserve: 1 XRP
+    const reserveBase = 1;
+    
+    // Owner reserve: 0.2 XRP per object
+    // OwnerCount includes trust lines, offers, NFTs, etc.
+    let ownerCount = 0;
+    if (accountData.OwnerCount) {
+      // Handle both string and number types
+      ownerCount = typeof accountData.OwnerCount === 'string' 
+        ? parseInt(accountData.OwnerCount) 
+        : accountData.OwnerCount;
+    }
+    
+    // Always count trust lines manually for accurate reserve calculation
+    // OwnerCount from account_info is often unreliable
+    try {
+      const accountLines = await client.request({
+        command: 'account_lines',
+        account: address,
+        ledger_index: 'validated'
+      });
+      const trustLineCount = accountLines.result.lines ? accountLines.result.lines.length : 0;
+      
+      // Use the higher count between OwnerCount and manual trust line count
+      ownerCount = Math.max(ownerCount, trustLineCount);
+    } catch (error) {
+      // Silently handle error - trust line count will remain 0
+    }
+    
+    const reserveOwner = ownerCount * 0.2;
+    const reserveTotal = reserveBase + reserveOwner;
+    
+    return {
+      reserveBase,
+      reserveOwner,
+      reserveTotal,
+      ownerCount
+    };
+  } catch (error) {
+    console.error(`Error calculating reserves for ${address}:`, error);
+    // If account doesn't exist or error, return zero reserves
+    return {
+      reserveBase: 0,
+      reserveOwner: 0,
+      reserveTotal: 0,
+      ownerCount: 0
+    };
+  }
+}
+
+// Simple cache to avoid repeated calls
+let cache: { data: { ok: boolean; data: { network: 'TESTNET' | 'MAINNET'; sourceTag: number; balances: WalletBalance[] } }; timestamp: number } | null = null;
+const CACHE_DURATION = 5000; // 5 seconds
 
 export async function GET() {
   try {
+    // Check cache first
+    if (cache && Date.now() - cache.timestamp < CACHE_DURATION) {
+      return NextResponse.json(cache.data);
+    }
+
     // Load wallets from storage (Vercel Blob in production, local file in development)
     const walletsData = await loadData<WalletData>('wallets.json');
     if (!walletsData) {
@@ -42,12 +130,14 @@ export async function GET() {
     // For development with mainnet, try real connection with timeout
     if (process.env.NODE_ENV !== 'production' && process.env.XRPL_NETWORK === 'MAINNET') {
       try {
-        // Try to connect with a shorter timeout
+        console.log(`Attempting to connect to MAINNET: ${wsUrl}`);
+        // Try to connect with a longer timeout for mainnet
         const client = new Client(wsUrl);
         await Promise.race([
           client.connect(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 10000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 30000))
         ]);
+        console.log('Successfully connected to MAINNET');
 
         const balances: WalletBalance[] = [];
         const currencyCode = process.env.XRPL_CURRENCY_CODE;
@@ -61,6 +151,9 @@ export async function GET() {
             });
             const xrpBalance = accountInfo.result.account_data.Balance;
             const balanceXrp = parseInt(xrpBalance) / 1000000;
+            
+            // Calculate reserves
+            const reserves = await calculateReserves(client, wallet.address);
             
             // Check for SBR balance (tokens are not in account_data, they're in separate trust lines)
             let balanceSbr = '0';
@@ -87,7 +180,11 @@ export async function GET() {
               address: wallet.address,
               balanceXrp,
               balanceDrops: xrpBalance,
-              balanceSbr
+              balanceSbr,
+              reserveBase: reserves.reserveBase,
+              reserveOwner: reserves.reserveOwner,
+              reserveTotal: reserves.reserveTotal,
+              availableXrp: Math.max(0, balanceXrp - reserves.reserveTotal)
             });
           } catch (err) {
             console.error(`Failed to get balance for ${wallet.address}:`, err);
@@ -96,39 +193,37 @@ export async function GET() {
               address: wallet.address,
               balanceXrp: 0,
               balanceDrops: '0',
-              balanceSbr: '0'
+              balanceSbr: '0',
+              reserveBase: 0,
+              reserveOwner: 0,
+              reserveTotal: 0,
+              availableXrp: 0
             });
           }
         }
 
         await client.disconnect();
-        return NextResponse.json({
+        
+        const response = {
           ok: true,
           data: {
             network: walletsData.network,
             sourceTag: walletsData.sourceTag,
             balances
           }
-        });
+        };
+        
+        // Cache the response
+        cache = { data: response, timestamp: Date.now() };
+        
+        return NextResponse.json(response);
       } catch (err) {
-        console.error('Failed to connect to mainnet, using mock data:', err);
-        // Fallback to mock data if connection fails
-        const balances: WalletBalance[] = walletsData.wallets.map(wallet => ({
-          role: wallet.role,
-          address: wallet.address,
-          balanceXrp: 0,
-          balanceDrops: '0',
-          balanceSbr: '0'
-        }));
-
+        console.error('Failed to connect to mainnet:', err);
+        // Don't use mock data, return error instead
         return NextResponse.json({
-          ok: true,
-          data: {
-            network: walletsData.network,
-            sourceTag: walletsData.sourceTag,
-            balances
-          }
-        });
+          ok: false,
+          error: `Failed to connect to mainnet: ${err instanceof Error ? err.message : 'Unknown error'}`
+        }, { status: 500 });
       }
     }
 
@@ -152,6 +247,9 @@ export async function GET() {
 
           const balanceDrops = accountInfo.result.account_data.Balance;
           const balanceXrp = Number(balanceDrops) / 1000000; // Convert drops to XRP
+
+          // Calculate reserves
+          const reserves = await calculateReserves(client, wallet.address);
 
           // Get SBR balance (if any)
           let sbrBalance = '0';
@@ -182,7 +280,11 @@ export async function GET() {
             address: wallet.address,
             balanceXrp: Math.round(balanceXrp * 1000000) / 1000000, // Round to 6 decimal places
             balanceDrops: balanceDrops,
-            balanceSbr: sbrBalance
+            balanceSbr: sbrBalance,
+            reserveBase: reserves.reserveBase,
+            reserveOwner: reserves.reserveOwner,
+            reserveTotal: reserves.reserveTotal,
+            availableXrp: Math.max(0, balanceXrp - reserves.reserveTotal)
           });
         } catch {
           // Account might not exist or have insufficient balance
@@ -191,21 +293,30 @@ export async function GET() {
             address: wallet.address,
             balanceXrp: 0,
             balanceDrops: '0',
-            balanceSbr: '0'
+            balanceSbr: '0',
+            reserveBase: 0,
+            reserveOwner: 0,
+            reserveTotal: 0,
+            availableXrp: 0
           });
         }
       }
 
       await client.disconnect();
 
-      return NextResponse.json({ 
+      const response = { 
         ok: true, 
         data: {
           network: walletsData.network,
           sourceTag: walletsData.sourceTag,
           balances
         }
-      });
+      };
+      
+      // Cache the response
+      cache = { data: response, timestamp: Date.now() };
+      
+      return NextResponse.json(response);
 
     } catch (xrplError) {
       await client.disconnect();

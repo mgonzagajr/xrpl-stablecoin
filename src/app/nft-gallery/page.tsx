@@ -25,6 +25,13 @@ interface NFTMetadata {
   }>;
 }
 
+interface NFTGroup {
+  taxon: number;
+  nfts: Array<{ nftokenId: string; uri?: string; taxon?: number }>;
+  metadata?: NFTMetadata;
+  totalCount: number;
+}
+
 export default function NFTGalleryPage() {
   const { wallets, loading: walletsLoading } = useWallets();
   const { toasts, removeToast } = useToast();
@@ -42,6 +49,7 @@ export default function NFTGalleryPage() {
   const [loadingMetadata, setLoadingMetadata] = useState<Record<string, boolean>>({});
   const [failedMetadata, setFailedMetadata] = useState<Set<string>>(new Set());
   const [queueStatus, setQueueStatus] = useState({ queueLength: 0, running: 0 });
+  const [groupedView, setGroupedView] = useState(true);
 
   // Generate Bithomp Explorer link for NFT
   const getBithompLink = (nftokenId: string) => {
@@ -182,6 +190,114 @@ export default function NFTGalleryPage() {
       setLoadingMetadata(prev => ({ ...prev, [nftokenId]: false }));
     }
   }, [metadataCache, failedMetadata]);
+
+  // Group NFTs by taxon
+  const groupNFTsByTaxon = useCallback((nfts: Array<{ nftokenId: string; uri?: string; taxon?: number }>): NFTGroup[] => {
+    const groups: Record<number, NFTGroup> = {};
+    
+    nfts.forEach(nft => {
+      const taxon = nft.taxon || 0;
+      if (!groups[taxon]) {
+        groups[taxon] = {
+          taxon,
+          nfts: [],
+          totalCount: 0
+        };
+      }
+      groups[taxon].nfts.push(nft);
+      groups[taxon].totalCount++;
+      
+      // Use metadata from first NFT in group
+      if (!groups[taxon].metadata && nft.uri) {
+        const metadata = metadataCache[nft.nftokenId];
+        if (metadata) {
+          groups[taxon].metadata = metadata;
+        }
+      }
+    });
+    
+    return Object.values(groups).sort((a, b) => a.taxon - b.taxon);
+  }, [metadataCache]);
+
+  // Render NFT group (one row per taxon)
+  const renderNFTGroup = (group: NFTGroup) => {
+    const metadata = group.metadata;
+    const firstNFT = group.nfts[0];
+    const isLoading = firstNFT ? loadingMetadata[firstNFT.nftokenId] : false;
+
+    return (
+      <Card key={`taxon-${group.taxon}`} className="hover:shadow-md transition-shadow">
+        <div className="flex items-center space-x-4">
+          {/* NFT Image */}
+          <div className="flex-shrink-0">
+            {metadata?.image ? (
+              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
+                <Image
+                  src={metadata.image}
+                  alt={metadata.name || `NFT Taxon ${group.taxon}`}
+                  width={64}
+                  height={64}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+                <div className="hidden w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                  No Image
+                </div>
+              </div>
+            ) : isLoading ? (
+              <div className="w-16 h-16 rounded-lg bg-gray-200 animate-pulse flex items-center justify-center">
+                <span className="text-gray-400 text-xs">Loading...</span>
+              </div>
+            ) : (
+              <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center">
+                <span className="text-gray-400 text-xs">No Image</span>
+              </div>
+            )}
+          </div>
+
+          {/* NFT Name */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900 truncate">
+              {metadata?.name || `NFT ${group.taxon}`}
+            </h3>
+          </div>
+
+          {/* Taxon ID */}
+          <div className="flex-shrink-0">
+            <span className="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded">
+              Taxon {group.taxon}
+            </span>
+          </div>
+
+          {/* Quantity */}
+          <div className="flex-shrink-0">
+            <span className="text-sm font-medium text-gray-900">
+              {group.totalCount} NFT{group.totalCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Explorer Link */}
+          <div className="flex-shrink-0">
+            <a
+              href={getBithompLink(firstNFT.nftokenId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+              title="View on Bithomp Explorer"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        </div>
+      </Card>
+    );
+  };
 
   // Set page title
   useEffect(() => {
@@ -501,11 +617,49 @@ export default function NFTGalleryPage() {
           </Button>
         </div>
 
-        {/* NFT Grid */}
-        {currentNFTs.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {currentNFTs.map((nft) => renderNFT(nft, selectedTab))}
+        {/* View Toggle */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-gray-700">View:</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setGroupedView(true)}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                  groupedView 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Grouped by Taxon
+              </button>
+              <button
+                onClick={() => setGroupedView(false)}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                  !groupedView 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Individual NFTs
+              </button>
+            </div>
           </div>
+          <div className="text-sm text-gray-500">
+            {currentNFTs.length} NFT{currentNFTs.length !== 1 ? 's' : ''} total
+          </div>
+        </div>
+
+        {/* NFT Display */}
+        {currentNFTs.length > 0 ? (
+          groupedView ? (
+            <div className="space-y-4">
+              {groupNFTsByTaxon(currentNFTs).map((group) => renderNFTGroup(group))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {currentNFTs.map((nft) => renderNFT(nft, selectedTab))}
+            </div>
+          )
         ) : (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">

@@ -66,6 +66,10 @@ export interface WalletBalance {
   balanceXrp: number;
   balanceDrops: string;
   balanceSbr?: string;
+  availableXrp?: number;
+  reserveTotal?: number;
+  reserveBase?: number;
+  reserveOwner?: number;
 }
 
 export interface BalancesApiData {

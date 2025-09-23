@@ -9,6 +9,7 @@ export interface IssuerAuthResult {
 /**
  * Ensures the issuer has authorized a trust line from the holder
  * Only used when XRPL_REQUIRE_AUTH=true
+ * Only authorizes trust lines from known wallets (our controlled accounts)
  */
 export async function ensureIssuerAuthorization(
   client: Client,
@@ -18,6 +19,28 @@ export async function ensureIssuerAuthorization(
   sourceTag: number
 ): Promise<IssuerAuthResult> {
   try {
+    // First, check if this is a known wallet address
+    // We need to load wallets to check if holderAddress is one of our controlled accounts
+    const { loadData } = await import('@/lib/vercel-storage');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const walletsData = await loadData<any>('wallets.json');
+    if (!walletsData) {
+      return {
+        status: 'error',
+        errorCode: 'WALLETS_NOT_FOUND'
+      };
+    }
+
+    // Check if holderAddress is one of our known wallets
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const knownAddresses = walletsData.wallets.map((w: any) => w.address);
+    if (!knownAddresses.includes(holderAddress)) {
+      console.log(`Skipping authorization for unknown address: ${holderAddress}`);
+      return {
+        status: 'ok' // Don't authorize unknown addresses
+      };
+    }
+
     // Check if the holder's trust line to issuer is already authorized
     const accountLines = await client.request({
       command: 'account_lines',
@@ -55,7 +78,7 @@ export async function ensureIssuerAuthorization(
         issuer: holderAddress,
         value: '0' // Set to 0 since we're only authorizing
       },
-      Flags: 0x00010000, // tfSetAuth
+      Flags: 0x00010000, // tfSetAuth - authorize the trust line from holder to issuer
       SourceTag: sourceTag
     };
 

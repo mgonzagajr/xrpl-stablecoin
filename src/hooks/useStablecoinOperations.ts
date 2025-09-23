@@ -23,6 +23,10 @@ interface BalanceEntry {
   address: string;
   xrp: string;
   sbr?: string;
+  availableXrp?: number;
+  reserveTotal?: number;
+  reserveBase?: number;
+  reserveOwner?: number;
 }
 
 interface BalancesResponse {
@@ -110,12 +114,26 @@ export function useStablecoinOperations() {
     setBalancesError(null);
 
     try {
-      const response = await fetch('/api/xrpl/balances');
+      const response = await fetch('/api/wallets/balances');
       const result = await response.json();
 
       if (result.ok && result.data) {
-        setBalancesData(result.data);
-        return { success: true, data: result.data };
+        // Transform the data to match the expected structure
+        const transformedData = {
+          currency: 'SBR',
+          entries: result.data.balances.map((balance: { role: string; address: string; balanceXrp: number; balanceSbr: string; availableXrp: number; reserveTotal: number; reserveBase: number; reserveOwner: number }) => ({
+            role: balance.role,
+            address: balance.address,
+            xrp: balance.balanceXrp.toString(),
+            sbr: balance.balanceSbr || '0',
+            availableXrp: balance.availableXrp,
+            reserveTotal: balance.reserveTotal,
+            reserveBase: balance.reserveBase,
+            reserveOwner: balance.reserveOwner
+          }))
+        };
+        setBalancesData(transformedData);
+        return { success: true, data: transformedData };
       } else {
         setBalancesError(result.error || 'Failed to fetch balances');
         return { success: false, error: result.error || 'Failed to fetch balances' };

@@ -12,6 +12,7 @@ import Header from '@/components/Header';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import { generateIdempotencyKey } from '@/lib/idempotency-helper';
+import { formatSbrBalance } from '@/lib/formatters';
 
 export default function SetupPage() {
   const { wallets, balances, loading, error, initializeWallets, refreshWallets, refreshBalances, clearCache } = useWallets();
@@ -239,13 +240,19 @@ export default function SetupPage() {
                         </td>
                         <td className="py-3 px-4">
                           {balance ? (
-                            <div className="flex items-center space-x-2">
-                              <span className="font-mono text-sm">
-                                {balance.balanceXrp.toFixed(6)} XRP
-                              </span>
-                              {needsFunding && (
-                                <span className="badge badge-warning">Needs Funding</span>
-                              )}
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono text-sm">
+                                  {balance.balanceXrp.toFixed(6)} XRP
+                                </span>
+                                {needsFunding && (
+                                  <span className="badge badge-warning">Needs Funding</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 space-y-0.5">
+                                <div>Available: {balance.availableXrp?.toFixed(6) || '0.000000'} XRP</div>
+                                <div>Reserve: {balance.reserveTotal?.toFixed(1) || '0.0'} XRP (Base: {balance.reserveBase || 0} + Owner: {balance.reserveOwner?.toFixed(1) || '0.0'})</div>
+                              </div>
                             </div>
                           ) : (
                             <span className="text-gray-400">Loading...</span>
@@ -530,7 +537,7 @@ export default function SetupPage() {
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-mono text-sm">
-                            {entry.sbr || '0'} {config?.currencyCode || 'SBR'}
+                            {formatSbrBalance(entry.sbr || '0')} {config?.currencyCode || 'SBR'}
                           </span>
                         </td>
                       </tr>

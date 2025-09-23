@@ -24,7 +24,7 @@ export const NETWORK_CONFIGS: Record<XRPLNetwork, NetworkConfig> = {
     recommendedMin: 20
   },
   MAINNET: {
-    wsUrl: 'wss://s1.ripple.com:443',
+    wsUrl: 'wss://xrplcluster.com',
     name: 'Mainnet',
     description: 'Rede principal do XRPL',
     hasFaucet: false,

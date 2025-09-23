@@ -45,9 +45,10 @@ export async function GET(request: NextRequest) {
         account: targetAddress,
       });
 
-      const nfts = response.result.account_nfts.map((nft: { NFTokenID: string; URI?: string }) => ({
+      const nfts = response.result.account_nfts.map((nft: { NFTokenID: string; URI?: string; NFTokenTaxon?: number }) => ({
         nftokenId: nft.NFTokenID,
         uri: nft.URI ? Buffer.from(nft.URI, 'hex').toString('utf8') : undefined,
+        taxon: nft.NFTokenTaxon || 0,
       }));
 
       return NextResponse.json({

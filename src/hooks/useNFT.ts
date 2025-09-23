@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 export interface NFT {
   nftokenId: string;
   uri?: string;
+  taxon?: number;
 }
 
 export interface NFTOffer {
@@ -38,6 +39,27 @@ export interface BurnRequest {
   nftokenId: string;
   role?: 'seller' | 'buyer';
   idempotencyKey?: string;
+}
+
+export interface BatchMintRequest {
+  uri: string;
+  count: number;
+  transferable?: boolean;
+  taxon?: number;
+  batchId?: string;
+}
+
+export interface BatchMintResponse {
+  success: boolean;
+  totalProcessed: number;
+  totalRequested: number;
+  nftokenIds: string[];
+  txHashes: string[];
+  errors: Array<{
+    nftIndex: number;
+    error: string;
+    attempts: number;
+  }>;
 }
 
 export interface MintResponse {
@@ -99,6 +121,10 @@ export function useNFT() {
   const [burnLoading, setBurnLoading] = useState(false);
   const [burnError, setBurnError] = useState<string | null>(null);
   const [burnData, setBurnData] = useState<BurnResponse | null>(null);
+
+  const [batchMintLoading, setBatchMintLoading] = useState(false);
+  const [batchMintError, setBatchMintError] = useState<string | null>(null);
+  const [batchMintData, setBatchMintData] = useState<BatchMintResponse | null>(null);
 
   const mint = async (request: MintRequest) => {
     setMintLoading(true);
@@ -317,6 +343,146 @@ export function useNFT() {
     }
   };
 
+  const mintBatch = async (
+    request: BatchMintRequest,
+    onProgress?: (update: {
+      type: string;
+      message?: string;
+      nftIndex?: number;
+      total?: number;
+      nftokenId?: string;
+      txHash?: string;
+      error?: string;
+      attempts?: number;
+    }) => void
+  ) => {
+    setBatchMintLoading(true);
+    setBatchMintError(null);
+    setBatchMintData(null);
+
+    try {
+      const response = await fetch('/api/nft/mint-batch-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalResult: BatchMintResponse | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              // Call progress callback if provided
+              if (onProgress) {
+                onProgress(data);
+              }
+
+              // Handle different update types
+              if (data.type === 'success') {
+                // Update our local state with successful NFT
+                setBatchMintData(prev => {
+                  if (!prev) {
+                    return {
+                      success: false,
+                      totalProcessed: 1,
+                      totalRequested: request.count,
+                      nftokenIds: [data.nftokenId],
+                      txHashes: [data.txHash],
+                      errors: []
+                    };
+                  }
+                  return {
+                    ...prev,
+                    totalProcessed: prev.totalProcessed + 1,
+                    nftokenIds: [...prev.nftokenIds, data.nftokenId],
+                    txHashes: [...prev.txHashes, data.txHash]
+                  };
+                });
+              } else if (data.type === 'error') {
+                // Update our local state with error
+                setBatchMintData(prev => {
+                  if (!prev) {
+                    return {
+                      success: false,
+                      totalProcessed: 0,
+                      totalRequested: request.count,
+                      nftokenIds: [],
+                      txHashes: [],
+                      errors: [{
+                        nftIndex: data.nftIndex || 0,
+                        error: data.error || data.message || 'Unknown error',
+                        attempts: data.attempts || 1
+                      }]
+                    };
+                  }
+                  return {
+                    ...prev,
+                    errors: [...prev.errors, {
+                      nftIndex: data.nftIndex || 0,
+                      error: data.error || data.message || 'Unknown error',
+                      attempts: data.attempts || 1
+                    }]
+                  };
+                });
+              } else if (data.type === 'complete') {
+                // Final result
+                setBatchMintData(prev => {
+                  if (!prev) return null;
+                  return {
+                    ...prev,
+                    success: prev.totalProcessed === prev.totalRequested
+                  };
+                });
+                finalResult = {
+                  success: true,
+                  totalProcessed: data.nftIndex || 0,
+                  totalRequested: data.total || request.count,
+                  nftokenIds: [],
+                  txHashes: [],
+                  errors: []
+                };
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+            }
+          }
+        }
+      }
+
+      return { success: true, data: finalResult };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setBatchMintError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setBatchMintLoading(false);
+    }
+  };
+
   const refreshSellerNFTs = useCallback(() => listNFTs('seller'), [listNFTs]);
   const refreshBuyerNFTs = useCallback(() => listNFTs('buyer'), [listNFTs]);
   const refreshOffers = useCallback(() => listOffers(true, false), [listOffers]);
@@ -367,5 +533,11 @@ export function useNFT() {
     burnError,
     burnData,
     burn,
+
+    // Batch Mint
+    batchMintLoading,
+    batchMintError,
+    batchMintData,
+    mintBatch,
   };
 }

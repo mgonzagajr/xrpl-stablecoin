@@ -53,7 +53,7 @@ export default function SetupPage() {
   const handleClearCache = () => {
     clearCache(); // Clear wallets cache
     clearXrplCache(); // Clear XRPL operations cache
-    showSuccess('Cache limpo com sucesso!');
+    showSuccess('Cache cleared successfully!');
   };
 
   const handleSetIssuerFlags = async () => {

@@ -82,7 +82,10 @@ export async function GET() {
     // Get issuer's account lines to find total stablecoin in circulation
     const issuerResponse = await fetch(getXrplApiUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'User-Agent': 'XRPL-Stablecoin-Dashboard/1.0'
+      },
       body: JSON.stringify({
         method: 'account_lines',
         params: [{
@@ -91,6 +94,10 @@ export async function GET() {
         }]
       })
     });
+
+    if (!issuerResponse.ok) {
+      throw new Error(`XRPL API error: ${issuerResponse.status} ${issuerResponse.statusText}`);
+    }
 
     const issuerData = await issuerResponse.json();
     if (issuerData.result && issuerData.result.lines) {

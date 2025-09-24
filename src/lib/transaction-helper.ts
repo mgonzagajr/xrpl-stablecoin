@@ -72,7 +72,10 @@ export async function fetchTransactionsWithSourceTag(
     try {
       const accountTxResponse = await fetch(getXrplApiUrl(), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'User-Agent': 'XRPL-Stablecoin-Dashboard/1.0'
+        },
         body: JSON.stringify({
           method: 'account_tx',
           params: [{
@@ -84,6 +87,11 @@ export async function fetchTransactionsWithSourceTag(
           }]
         })
       });
+
+      if (!accountTxResponse.ok) {
+        console.warn(`XRPL API error for wallet ${wallet.address}: ${accountTxResponse.status} ${accountTxResponse.statusText}`);
+        continue;
+      }
 
       const accountTxData = await accountTxResponse.json();
 

@@ -41,7 +41,7 @@ export function getXrplApiUrl(): string {
   if (network === 'MAINNET') {
     return 'https://xrplcluster.com';
   } else {
-    return 'https://s.altnet.rippletest.net:51233';
+    return 'https://testnet.xrpl-labs.com';
   }
 }
 

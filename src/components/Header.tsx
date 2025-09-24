@@ -22,6 +22,12 @@ export default function Header() {
               Setup
             </Link>
             <Link 
+              href="/dashboard" 
+              className="text-gray-600 hover:text-purple transition-colors font-medium"
+            >
+              Dashboard
+            </Link>
+            <Link 
               href="/nft" 
               className="text-gray-600 hover:text-purple transition-colors font-medium"
             >

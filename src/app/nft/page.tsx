@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useNFT } from '@/hooks/useNFT';
 import { useWallets } from '@/hooks/useWallets';
 import { useStablecoinOperations } from '@/hooks/useStablecoinOperations';
@@ -15,6 +16,21 @@ import { generateIdempotencyKey } from '@/lib/idempotency-helper';
 import { formatSbrBalance } from '@/lib/formatters';
 import { getCachedMetadata, setCachedMetadata } from '@/lib/ipfs-cache';
 import { useState, useEffect, useCallback } from 'react';
+
+// Helper function to convert IPFS URLs to HTTPS gateways
+function convertIpfsUrl(url: string): string {
+  if (url.startsWith('ipfs://')) {
+    const hash = url.replace('ipfs://', '');
+    // Try multiple IPFS gateways for better reliability
+    const gateways = [
+      'https://ipfs.io/ipfs/',
+      'https://gateway.pinata.cloud/ipfs/',
+      'https://cloudflare-ipfs.com/ipfs/'
+    ];
+    return `${gateways[0]}${hash}`;
+  }
+  return url;
+}
 
 interface NFTMetadata {
   name?: string;
@@ -136,14 +152,14 @@ export default function NFTPage() {
             {/* NFT Image */}
             <div className="w-8 h-8 bg-gray-200 rounded overflow-hidden flex items-center justify-center">
               {metadata?.image ? (
-                <img
-                  src={metadata.image}
+                <Image
+                  src={convertIpfsUrl(metadata.image)}
                   alt={metadata.name || `NFT ${group.taxon}`}
+                  width={32}
+                  height={32}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.classList.remove('hidden');
+                  onError={() => {
+                    // Handle error by hiding the image
                   }}
                 />
               ) : null}

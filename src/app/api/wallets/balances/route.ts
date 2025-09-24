@@ -18,18 +18,6 @@ interface WalletData {
   }>;
 }
 
-interface BalanceData {
-  balances: Array<{
-    role: string;
-    address: string;
-    balanceXrp: number;
-    balanceSbr: string;
-    availableXrp: number;
-    reserveTotal: number;
-    reserveBase: number;
-    reserveOwner: number;
-  }>;
-}
 
 interface WalletBalance {
   role: string;
@@ -79,7 +67,7 @@ async function calculateReserves(client: Client, address: string) {
       
       // Use the higher count between OwnerCount and manual trust line count
       ownerCount = Math.max(ownerCount, trustLineCount);
-    } catch (error) {
+    } catch {
       // Silently handle error - trust line count will remain 0
     }
     
@@ -92,8 +80,8 @@ async function calculateReserves(client: Client, address: string) {
       reserveTotal,
       ownerCount
     };
-  } catch (error) {
-    console.error(`Error calculating reserves for ${address}:`, error);
+  } catch {
+    console.error(`Error calculating reserves for ${address}`);
     // If account doesn't exist or error, return zero reserves
     return {
       reserveBase: 0,

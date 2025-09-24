@@ -14,6 +14,21 @@ import { CopyButton } from '@/components/CopyButton';
 import { getCachedMetadata, setCachedMetadata, clearExpiredCache } from '@/lib/ipfs-cache';
 import { ipfsQueue } from '@/lib/ipfs-queue';
 
+// Helper function to convert IPFS URLs to HTTPS gateways
+function convertIpfsUrl(url: string): string {
+  if (url.startsWith('ipfs://')) {
+    const hash = url.replace('ipfs://', '');
+    // Try multiple IPFS gateways for better reliability
+    const gateways = [
+      'https://ipfs.io/ipfs/',
+      'https://gateway.pinata.cloud/ipfs/',
+      'https://cloudflare-ipfs.com/ipfs/'
+    ];
+    return `${gateways[0]}${hash}`;
+  }
+  return url;
+}
+
 interface NFTMetadata {
   name?: string;
   description?: string;
@@ -233,7 +248,7 @@ export default function NFTGalleryPage() {
             {metadata?.image ? (
               <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
                 <Image
-                  src={metadata.image}
+                  src={convertIpfsUrl(metadata.image)}
                   alt={metadata.name || `NFT Taxon ${group.taxon}`}
                   width={64}
                   height={64}
@@ -387,7 +402,7 @@ export default function NFTGalleryPage() {
         {metadata?.image && (
           <div className="mb-4 relative w-full h-64 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
             <Image
-              src={metadata.image}
+              src={convertIpfsUrl(metadata.image)}
               alt={metadata.name || 'NFT Image'}
               fill
               className="object-contain rounded-lg"

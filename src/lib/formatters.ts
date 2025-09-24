@@ -30,3 +30,34 @@ export function formatSbrBalance(balance: string): string {
 export function formatXrpBalance(balance: number): string {
   return balance.toFixed(6);
 }
+
+/**
+ * Format currency with proper symbol and thousands separators
+ * @param value - The value to format as string
+ * @param currency - Currency code (BRL, USD, etc.)
+ * @returns Formatted currency string
+ */
+export function formatCurrency(value: string, currency: string): string {
+  const num = parseFloat(value);
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(num);
+}
+
+/**
+ * Format currency amount without symbol, just number + currency code
+ * @param value - The value to format as string
+ * @param currency - Currency code (USD, BRL, etc.)
+ * @returns Formatted amount with currency code
+ */
+export function formatCurrencyAmount(value: string, currency: string): string {
+  const num = parseFloat(value);
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(num);
+  return `${formatted} ${currency}`;
+}

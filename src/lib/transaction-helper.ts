@@ -2,6 +2,8 @@
  * Utility functions for fetching and processing XRPL transactions
  */
 
+import { getXrplApiUrl } from '@/lib/network-config';
+
 interface XRPLTransactionData {
   TransactionType: string;
   Account: string;
@@ -68,7 +70,7 @@ export async function fetchTransactionsWithSourceTag(
   // Fetch transactions from all wallets
   for (const wallet of wallets) {
     try {
-      const accountTxResponse = await fetch('https://xrplcluster.com/', {
+      const accountTxResponse = await fetch(getXrplApiUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

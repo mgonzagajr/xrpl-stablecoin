@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loadData } from '@/lib/vercel-storage';
 import { fetchTransactionsWithSourceTag } from '@/lib/transaction-helper';
+import { getXrplApiUrl } from '@/lib/network-config';
 
 interface DashboardMetrics {
   marketCap: {
@@ -79,7 +80,7 @@ export async function GET() {
     let transactionCount = 0;
 
     // Get issuer's account lines to find total stablecoin in circulation
-    const issuerResponse = await fetch('https://xrplcluster.com', {
+    const issuerResponse = await fetch(getXrplApiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

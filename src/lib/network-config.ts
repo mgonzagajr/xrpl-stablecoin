@@ -34,6 +34,18 @@ export const NETWORK_CONFIGS: Record<XRPLNetwork, NetworkConfig> = {
 };
 
 /**
+ * Obtém a URL HTTP da API XRPL baseada na rede atual
+ */
+export function getXrplApiUrl(): string {
+  const network = (process.env.XRPL_NETWORK || 'TESTNET') as XRPLNetwork;
+  if (network === 'MAINNET') {
+    return 'https://xrplcluster.com';
+  } else {
+    return 'https://s.altnet.rippletest.net:51233';
+  }
+}
+
+/**
  * Obtém a configuração da rede baseada na variável de ambiente
  */
 export function getNetworkConfig(): NetworkConfig {

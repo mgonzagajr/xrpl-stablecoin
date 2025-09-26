@@ -1,6 +1,6 @@
 /**
- * Configurações de rede XRPL
- * Centraliza as URLs e configurações específicas de cada rede
+ * XRPL network configuration
+ * Centralizes URLs and specific settings for each network
  */
 
 export type XRPLNetwork = 'TESTNET' | 'MAINNET';
@@ -10,8 +10,8 @@ export interface NetworkConfig {
   name: string;
   description: string;
   hasFaucet: boolean;
-  minReserve: number; // XRP mínimo para reserva de conta
-  recommendedMin: number; // XRP recomendado para operações
+  minReserve: number; // Minimum XRP for account reserve
+  recommendedMin: number; // Recommended XRP for operations
 }
 
 export const NETWORK_CONFIGS: Record<XRPLNetwork, NetworkConfig> = {
@@ -34,7 +34,7 @@ export const NETWORK_CONFIGS: Record<XRPLNetwork, NetworkConfig> = {
 };
 
 /**
- * Obtém a URL HTTP da API XRPL baseada na rede atual
+ * Gets the HTTP API URL for the current XRPL network
  */
 export function getXrplApiUrl(): string {
   const network = (process.env.XRPL_NETWORK || 'TESTNET') as XRPLNetwork;
@@ -46,7 +46,7 @@ export function getXrplApiUrl(): string {
 }
 
 /**
- * Obtém a configuração da rede baseada na variável de ambiente
+ * Gets the network configuration based on the environment variable
  */
 export function getNetworkConfig(): NetworkConfig {
   const network = (process.env.XRPL_NETWORK || 'TESTNET') as XRPLNetwork;
@@ -54,28 +54,28 @@ export function getNetworkConfig(): NetworkConfig {
 }
 
 /**
- * Obtém a URL WebSocket da rede atual
+ * Gets the WebSocket URL for the current network
  */
 export function getWebSocketUrl(): string {
   return getNetworkConfig().wsUrl;
 }
 
 /**
- * Verifica se a rede atual tem faucet disponível
+ * Checks if the current network has a faucet available
  */
 export function hasFaucet(): boolean {
   return getNetworkConfig().hasFaucet;
 }
 
 /**
- * Obtém o XRP mínimo recomendado para a rede atual
+ * Gets the recommended minimum XRP for the current network
  */
 export function getRecommendedMinXrp(): number {
   return getNetworkConfig().recommendedMin;
 }
 
 /**
- * Obtém informações da rede atual para exibição
+ * Gets current network info for display
  */
 export function getNetworkInfo() {
   const config = getNetworkConfig();

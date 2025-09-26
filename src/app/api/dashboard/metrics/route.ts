@@ -24,7 +24,7 @@ interface DashboardMetrics {
 }
 
 
-// Cache para taxa USD (simulado - em produção usaria Vercel Storage)
+// Cache for USD rate (simulated - in production use Vercel Storage)
 let usdRateCache: { rate: number; timestamp: number } | null = null;
 
 async function getUsdRate(): Promise<number> {

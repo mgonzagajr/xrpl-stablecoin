@@ -268,7 +268,8 @@ export function useNFT() {
         return { success: true, data: result.data };
       } else {
         setAcceptOfferError(result.error);
-        return { success: false, error: result.error };
+        // Also return the 'details' field if it exists
+        return { success: false, error: result.error, details: result.details };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

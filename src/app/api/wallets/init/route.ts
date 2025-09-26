@@ -63,7 +63,7 @@ async function generateWallets(): Promise<WalletData> {
   return walletData;
 }
 
-// Função removida - não é mais necessária com Vercel Blob
+// Function removed - no longer needed with Vercel Blob
 
 export async function POST(): Promise<NextResponse<ApiResponse<WalletsApiData>>> {
   try {

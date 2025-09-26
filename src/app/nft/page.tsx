@@ -444,7 +444,12 @@ export default function NFTPage() {
       
       fetchBalances();
     } else {
-      showError(`Failed to accept offer: ${result.error}`);
+      // Se houver detalhes do erro, exiba junto
+      let errorMsg = `Failed to accept offer: ${result.error}`;
+      if (result.details) {
+        errorMsg += ` (${result.details})`;
+      }
+      showError(errorMsg);
     }
   };
 

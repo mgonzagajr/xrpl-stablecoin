@@ -2,26 +2,26 @@ import { put, del, list } from '@vercel/blob';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 
-// Helper para detectar se estamos em produção (Vercel) ou desenvolvimento local
+// Helper to detect if running in production (Vercel) or local development
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Função para salvar dados
+// Function to save data
 export async function saveData(filename: string, data: unknown): Promise<void> {
   const jsonData = JSON.stringify(data, null, 2);
   
   if (isProduction) {
-    // Em produção: usar Vercel Blob
+    // In production: use Vercel Blob
     await put(filename, jsonData, {
       access: 'public',
       contentType: 'application/json',
       allowOverwrite: true, // Permitir sobrescrita de arquivos existentes
     });
   } else {
-    // Em desenvolvimento: usar sistema de arquivos local
+    // In desenvolvimento: use local file system
     const filePath = join(process.cwd(), 'data', filename);
     const dataDir = dirname(filePath);
     
-    // Criar diretório se não existir
+    // Create directory if it does not exist
     if (!existsSync(dataDir)) {
       mkdirSync(dataDir, { recursive: true });
     }
@@ -30,11 +30,11 @@ export async function saveData(filename: string, data: unknown): Promise<void> {
   }
 }
 
-// Função para carregar dados
+// Function to load data
 export async function loadData<T>(filename: string): Promise<T | null> {
   try {
     if (isProduction) {
-      // Em produção: usar Vercel Blob
+      // In production: use Vercel Blob
       try {
         const { list } = await import('@vercel/blob');
         const { blobs } = await list();
@@ -58,7 +58,7 @@ export async function loadData<T>(filename: string): Promise<T | null> {
         return null;
       }
     } else {
-      // Em desenvolvimento: usar sistema de arquivos local
+      // In desenvolvimento: use local file system
       const filePath = join(process.cwd(), 'data', filename);
       if (!existsSync(filePath)) {
         return null;
@@ -72,13 +72,13 @@ export async function loadData<T>(filename: string): Promise<T | null> {
   }
 }
 
-// Função para deletar dados
+// Function to delete data
 export async function deleteData(filename: string): Promise<void> {
   if (isProduction) {
-    // Em produção: usar Vercel Blob
+    // In production: use Vercel Blob
     await del(filename);
   } else {
-    // Em desenvolvimento: usar sistema de arquivos local
+    // In desenvolvimento: use local file system
     const filePath = join(process.cwd(), 'data', filename);
     if (existsSync(filePath)) {
       const fs = await import('fs');
@@ -87,14 +87,14 @@ export async function deleteData(filename: string): Promise<void> {
   }
 }
 
-// Função para listar arquivos
+// Function to list files
 export async function listData(): Promise<string[]> {
   if (isProduction) {
-    // Em produção: usar Vercel Blob
+    // In production: use Vercel Blob
     const { blobs } = await list();
     return blobs.map(blob => blob.pathname);
   } else {
-    // Em desenvolvimento: usar sistema de arquivos local
+    // In desenvolvimento: use local file system
     const fs = await import('fs');
     const dataDir = join(process.cwd(), 'data');
     if (!existsSync(dataDir)) {
